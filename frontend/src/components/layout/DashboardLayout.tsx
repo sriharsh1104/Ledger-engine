@@ -7,14 +7,13 @@ import {
   Bell,
   Menu,
   X,
-  Wallet,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { getTotalBalance } from '../../lib/mockData'
-import { formatCurrency } from '../../lib/format'
 import { SettingsMenu } from './SettingsMenu'
 import { ThemeToggle } from '../ui/ThemeToggle'
+import { WalletConnectModal } from '../wallet/WalletConnectModal'
+import { HeaderWalletButton } from '../wallet/HeaderWalletButton'
 
 const navItems = [
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
@@ -26,7 +25,7 @@ export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const totalBalance = getTotalBalance()
+  const [walletModalOpen, setWalletModalOpen] = useState(false)
 
   function handleLogout() {
     logout()
@@ -84,37 +83,34 @@ export function DashboardLayout() {
         </nav>
 
         <div className="p-4 border-t border-border-subtle">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
-              {user?.name?.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center gap-3 px-2 w-full rounded-xl hover:bg-surface-overlay py-2 transition-colors cursor-pointer"
+          >
+            {user?.profileImage ? (
+              <img src={user.profileImage} alt="" className="w-9 h-9 rounded-full object-cover" />
+            ) : (
+              <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
+                {user?.name?.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium text-white truncate">{user?.name}</p>
               <p className="text-xs text-slate-500 truncate">{user?.email}</p>
             </div>
-          </div>
+          </button>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-border-subtle flex items-center justify-between px-4 lg:px-8 bg-surface/80 backdrop-blur-sm">
+        <header className="relative z-50 shrink-0 h-16 border-b border-border-subtle flex items-center justify-between px-4 lg:px-8 bg-surface/80 backdrop-blur-sm">
           <button className="lg:hidden text-slate-400" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
           </button>
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-surface-overlay border border-border-subtle">
-              <Wallet className="w-4 h-4 text-accent shrink-0 hidden sm:block" />
-              <div className="text-right">
-                <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-none hidden sm:block">
-                  Balance
-                </p>
-                <p className="text-sm font-bold text-white font-mono leading-tight">
-                  {formatCurrency(totalBalance)}
-                </p>
-              </div>
-            </div>
+            <HeaderWalletButton onClick={() => setWalletModalOpen(true)} />
 
             <button className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-surface-overlay transition-colors cursor-pointer">
               <Bell className="w-5 h-5" />
@@ -126,8 +122,10 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-8 overflow-auto"><Outlet /></main>
+        <main className="relative z-0 flex-1 p-4 lg:p-8 overflow-auto"><Outlet /></main>
       </div>
+
+      <WalletConnectModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
     </div>
   )
 }

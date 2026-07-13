@@ -42,6 +42,28 @@ function generateToken() {
   return `led_${crypto.randomUUID().replace(/-/g, '')}`
 }
 
+import { getProfile } from './profile'
+import type { User } from '../types'
+
+function toSessionUser(user: StoredUser): User {
+  const profile = getProfile(user.id)
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    profileImage: profile.profileImage,
+    phoneCode: profile.phoneCode,
+    phoneNumber: profile.phoneNumber,
+  }
+}
+
+function saveSession(user: StoredUser) {
+  const token = generateToken()
+  const session = { token, user: toSessionUser(user) }
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
+  return session
+}
+
 export async function signup(name: string, email: string, password: string) {
   await delay(600)
   const users = getUsers()
@@ -51,10 +73,7 @@ export async function signup(name: string, email: string, password: string) {
   const user: StoredUser = { id: generateId(), name, email, password }
   users.push(user)
   saveUsers(users)
-  const token = generateToken()
-  const session = { token, user: { id: user.id, name: user.name, email: user.email } }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  return session
+  return saveSession(user)
 }
 
 export async function login(email: string, password: string) {
@@ -66,10 +85,7 @@ export async function login(email: string, password: string) {
   if (!user) {
     throw new Error('Invalid email or password')
   }
-  const token = generateToken()
-  const session = { token, user: { id: user.id, name: user.name, email: user.email } }
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
-  return session
+  return saveSession(user)
 }
 
 export async function forgotPassword(email: string) {
@@ -86,10 +102,26 @@ export function getSession() {
   const raw = localStorage.getItem(SESSION_KEY)
   if (!raw) return null
   try {
-    return JSON.parse(raw) as { token: string; user: { id: string; name: string; email: string } }
+    const session = JSON.parse(raw) as { token: string; user: User }
+    const profile = getProfile(session.user.id)
+    session.user = {
+      ...session.user,
+      profileImage: profile.profileImage,
+      phoneCode: profile.phoneCode,
+      phoneNumber: profile.phoneNumber,
+    }
+    return session
   } catch {
     return null
   }
+}
+
+export function refreshSessionUser(user: User) {
+  const raw = localStorage.getItem(SESSION_KEY)
+  if (!raw) return
+  const session = JSON.parse(raw)
+  session.user = user
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session))
 }
 
 export function logout() {

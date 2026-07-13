@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { Button } from './Button'
 
@@ -7,24 +8,31 @@ interface ModalProps {
   onClose: () => void
   title: string
   children: ReactNode
+  size?: 'sm' | 'md' | 'lg'
 }
 
-export function Modal({ open, onClose, title, children }: ModalProps) {
+const sizeClass = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' }
+
+export function Modal({ open, onClose, title, children, size = 'sm' }: ModalProps) {
   useEffect(() => {
     if (!open) return
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
     }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
   }, [open, onClose])
 
   if (!open) return null
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative glass-card rounded-2xl w-full max-w-sm p-6 animate-fade-in shadow-2xl">
+      <div className={`relative glass-card rounded-2xl w-full ${sizeClass[size]} p-6 animate-fade-in shadow-2xl max-h-[90vh] overflow-y-auto`}>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">{title}</h2>
           <button
@@ -36,7 +44,8 @@ export function Modal({ open, onClose, title, children }: ModalProps) {
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
 

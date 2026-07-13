@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
 import * as authApi from '../lib/auth'
-import type { User } from '../types'
+import { updateProfile as updateProfileApi } from '../lib/profile'
+import type { User, ProfileUpdate } from '../types'
 
 interface AuthContextValue {
   user: User | null
@@ -9,6 +10,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>
   signup: (name: string, email: string, password: string) => Promise<void>
   forgotPassword: (email: string) => Promise<string>
+  updateProfile: (data: ProfileUpdate) => Promise<void>
   logout: () => void
 }
 
@@ -48,6 +50,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const updateProfile = useCallback(async (data: ProfileUpdate) => {
+    if (!user) return
+    setIsLoading(true)
+    try {
+      const profile = await updateProfileApi(user.id, data)
+      const updated: User = {
+        ...user,
+        profileImage: profile.profileImage,
+        phoneCode: profile.phoneCode,
+        phoneNumber: profile.phoneNumber,
+      }
+      authApi.refreshSessionUser(updated)
+      setUser(updated)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user])
+
   const logout = useCallback(() => {
     authApi.logout()
     setUser(null)
@@ -62,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         signup,
         forgotPassword,
+        updateProfile,
         logout,
       }}
     >

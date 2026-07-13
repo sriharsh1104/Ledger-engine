@@ -24,3 +24,19 @@ export function formatRelativeDate(iso: string) {
   if (days < 7) return `${days} days ago`
   return formatDate(iso)
 }
+
+/** Truncate wallet address: first N + ... + last N chars */
+export function truncateAddress(address: string, start = 4, end = 4): string {
+  if (!address) return ''
+  if (address.length <= start + end + 3) return address
+  return `${address.slice(0, start)}...${address.slice(-end)}`
+}
+
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    return false
+  }
+}
