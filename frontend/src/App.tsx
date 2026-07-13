@@ -12,6 +12,7 @@ import { DashboardOverview } from './pages/DashboardOverview'
 import { TransferPage } from './pages/TransferPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { TwoFactorPage } from './pages/TwoFactorPage'
 
 export default function App() {
   return (
@@ -35,6 +36,7 @@ export default function App() {
                   <Route path="/transfer" element={<TransferPage />} />
                   <Route path="/ledger" element={<LedgerPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/security/2fa" element={<TwoFactorPage />} />
                 </Route>
               </Route>
 

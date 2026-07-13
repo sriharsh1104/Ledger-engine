@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { Settings, User, Shield, LogOut, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { ConfirmModal } from '../ui/Modal'
+import { ChangePasswordModal } from '../security/ChangePasswordModal'
+import { getSecuritySettings } from '../../lib/security'
 
 type SettingsTab = 'profile' | 'security'
 
@@ -17,10 +19,18 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
   const [showLogoutModal, setShowLogoutModal] = useState(false)
+  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const [menuPos, setMenuPos] = useState({ top: 0, right: 0 })
+
+  useEffect(() => {
+    if (user) {
+      setTwoFactorEnabled(getSecuritySettings(user.id).twoFactorEnabled)
+    }
+  }, [user, open])
 
   useEffect(() => {
     if (!open || !buttonRef.current) return
@@ -58,6 +68,16 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
     navigate('/profile')
   }
 
+  function openPasswordModal() {
+    setOpen(false)
+    setShowPasswordModal(true)
+  }
+
+  function open2FAModal() {
+    setOpen(false)
+    navigate('/security/2fa')
+  }
+
   function confirmLogout() {
     setShowLogoutModal(false)
     onLogout()
@@ -89,7 +109,7 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
             <div
               ref={dropdownRef}
               style={{ top: menuPos.top, right: menuPos.right }}
-              className="fixed w-72 glass-card rounded-2xl shadow-2xl border border-border-subtle overflow-hidden animate-fade-in z-[200]"
+              className="fixed w-80 glass-card rounded-2xl shadow-2xl border border-border-subtle overflow-hidden animate-fade-in z-[200]"
             >
               <div className="flex border-b border-border-subtle">
                 {tabs.map((tab) => (
@@ -141,18 +161,28 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
                       <span className="font-medium">Account secured</span>
                     </div>
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-surface-overlay text-xs">
+                      <button
+                        onClick={open2FAModal}
+                        className="flex justify-between items-center w-full py-2.5 px-3 rounded-xl bg-surface-overlay text-xs
+                          hover:bg-surface-overlay/80 transition-colors cursor-pointer"
+                      >
                         <span className="text-slate-400">Two-factor auth</span>
-                        <span className="text-slate-500">Not enabled</span>
-                      </div>
-                      <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-surface-overlay text-xs">
+                        <span className={twoFactorEnabled ? 'text-accent font-medium' : 'text-accent hover:underline'}>
+                          {twoFactorEnabled ? 'Enabled' : 'Enable'}
+                        </span>
+                      </button>
+                      <div className="flex justify-between items-center py-2.5 px-3 rounded-xl bg-surface-overlay text-xs">
                         <span className="text-slate-400">Last login</span>
                         <span className="text-slate-300">Today</span>
                       </div>
-                      <div className="flex justify-between items-center py-2 px-3 rounded-xl bg-surface-overlay text-xs">
+                      <button
+                        onClick={openPasswordModal}
+                        className="flex justify-between items-center w-full py-2.5 px-3 rounded-xl bg-surface-overlay text-xs
+                          hover:bg-surface-overlay/80 transition-colors cursor-pointer"
+                      >
                         <span className="text-slate-400">Password</span>
-                        <span className="text-accent cursor-pointer hover:underline">Change</span>
-                      </div>
+                        <span className="text-accent hover:underline">Change</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -182,6 +212,14 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
         confirmLabel="Yes"
         cancelLabel="No"
       />
+
+      {user && (
+        <ChangePasswordModal
+          open={showPasswordModal}
+          onClose={() => setShowPasswordModal(false)}
+          userId={user.id}
+        />
+      )}
     </>
   )
 }

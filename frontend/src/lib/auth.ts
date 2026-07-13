@@ -128,6 +128,25 @@ export function logout() {
   localStorage.removeItem(SESSION_KEY)
 }
 
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  await delay(500)
+  const users = getUsers()
+  const idx = users.findIndex((u) => u.id === userId)
+  if (idx < 0) throw new Error('User not found')
+  if (users[idx].password !== currentPassword) {
+    throw new Error('Current password is incorrect')
+  }
+  if (newPassword.length < 6) {
+    throw new Error('New password must be at least 6 characters')
+  }
+  users[idx] = { ...users[idx], password: newPassword }
+  saveUsers(users)
+}
+
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
