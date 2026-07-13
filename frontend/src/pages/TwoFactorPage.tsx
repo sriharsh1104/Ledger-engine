@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Shield } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { TwoFactorSetup } from '../components/security/TwoFactorSetup'
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 

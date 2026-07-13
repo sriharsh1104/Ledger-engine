@@ -9,7 +9,7 @@ import {
   X,
 } from 'lucide-react'
 import { useState } from 'react'
-import { useAuth } from '../../context/AuthContext'
+import { useAuth } from '../../hooks/useAuth'
 import { SettingsMenu } from './SettingsMenu'
 import { ThemeToggle } from '../ui/ThemeToggle'
 import { HeaderWalletButton } from '../wallet/HeaderWalletButton'

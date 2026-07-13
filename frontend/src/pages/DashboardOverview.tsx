@@ -1,4 +1,4 @@
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { WalletCards } from '../components/dashboard/WalletCards'
 import { RecentTransactions } from '../components/dashboard/RecentTransactions'
 import { TransferForm } from '../components/dashboard/TransferForm'

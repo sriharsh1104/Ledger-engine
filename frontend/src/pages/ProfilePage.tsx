@@ -1,6 +1,6 @@
 import { useState, useRef, type FormEvent, type ChangeEvent } from 'react'
 import { Camera, CheckCircle, User, Mail, Phone, Lock } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import { PHONE_COUNTRIES } from '../lib/profile'
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'

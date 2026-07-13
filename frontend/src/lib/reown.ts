@@ -1,9 +1,6 @@
 import { createAppKit } from '@reown/appkit/react'
 import { WagmiAdapter } from '@reown/appkit-adapter-wagmi'
 import { mainnet, polygon, arbitrum, base } from '@reown/appkit/networks'
-import { QueryClient } from '@tanstack/react-query'
-
-export const queryClient = new QueryClient()
 
 export const networks = [mainnet, polygon, arbitrum, base] as [
   typeof mainnet,

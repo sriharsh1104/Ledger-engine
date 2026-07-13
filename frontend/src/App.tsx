@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './context/AuthContext'
+import { AppProviders } from './providers/AppProviders'
 import { ThemeProvider } from './context/ThemeContext'
 import { Web3Provider } from './providers/Web3Provider'
 import { ProtectedRoute, PublicRoute } from './routes/ProtectedRoute'
@@ -16,10 +16,10 @@ import { TwoFactorPage } from './pages/TwoFactorPage'
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <Web3Provider>
-        <AppKitThemeSync />
-        <AuthProvider>
+    <AppProviders>
+      <ThemeProvider>
+        <Web3Provider>
+          <AppKitThemeSync />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -43,8 +43,8 @@ export default function App() {
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </BrowserRouter>
-        </AuthProvider>
-      </Web3Provider>
-    </ThemeProvider>
+        </Web3Provider>
+      </ThemeProvider>
+    </AppProviders>
   )
 }
