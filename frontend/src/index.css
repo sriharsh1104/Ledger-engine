@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  --color-surface: #0c1222;
+  --color-surface-raised: #131b2e;
+  --color-surface-overlay: #1a2540;
+  --color-border: #243049;
+  --color-border-subtle: #1e2a42;
+  --color-accent: #10b981;
+  --color-accent-hover: #059669;
+  --color-accent-muted: #064e3b;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-text-primary: #f1f5f9;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+}
+
+/* Light theme overrides */
+[data-theme="light"] {
+  --color-surface: #f1f5f9;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #f8fafc;
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-accent-muted: #d1fae5;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.2); }
+  50% { box-shadow: 0 0 20px 4px rgba(16, 185, 129, 0.15); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slide-in 0.35s ease-out forwards;
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(26, 37, 64, 0.8) 0%, rgba(19, 27, 46, 0.9) 100%);
+  border: 1px solid var(--color-border-subtle);
+  backdrop-filter: blur(12px);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="light"] .glass-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(248, 250, 252, 0.98) 100%);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.gradient-mesh {
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(59, 130, 246, 0.06) 0%, transparent 60%),
+    var(--color-surface);
+  transition: background 0.3s ease;
+}
+
+[data-theme="light"] .gradient-mesh {
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(16, 185, 129, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 50% at 90% 80%, rgba(59, 130, 246, 0.04) 0%, transparent 60%),
+    var(--color-surface);
+}
+
+/* Light theme text remapping for existing utility classes */
+[data-theme="light"] .text-white {
+  color: var(--color-text-primary);
+}
+
+[data-theme="light"] .text-slate-300 {
+  color: #334155;
+}
+
+[data-theme="light"] .text-slate-400 {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="light"] .text-slate-500 {
+  color: var(--color-text-muted);
+}
+
+[data-theme="light"] .hover\:text-white:hover {
+  color: var(--color-text-primary);
+}
+
+[data-theme="light"] .bg-surface\/80 {
+  background-color: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+}
+
+[data-theme="light"] .bg-black\/50 {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] .bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] input,
+[data-theme="light"] select {
+  color: var(--color-text-primary);
+}
+
+[data-theme="light"] input::placeholder {
+  color: var(--color-text-muted);
+}
+
+[data-theme="light"] select option {
+  background: var(--color-surface-raised);
+  color: var(--color-text-primary);
+}
