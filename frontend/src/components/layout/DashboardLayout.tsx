@@ -12,7 +12,6 @@ import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { SettingsMenu } from './SettingsMenu'
 import { ThemeToggle } from '../ui/ThemeToggle'
-import { WalletConnectModal } from '../wallet/WalletConnectModal'
 import { HeaderWalletButton } from '../wallet/HeaderWalletButton'
 
 const navItems = [
@@ -25,7 +24,6 @@ export function DashboardLayout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [walletModalOpen, setWalletModalOpen] = useState(false)
 
   function handleLogout() {
     logout()
@@ -110,7 +108,7 @@ export function DashboardLayout() {
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <HeaderWalletButton onClick={() => setWalletModalOpen(true)} />
+            <HeaderWalletButton />
 
             <button className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-surface-overlay transition-colors cursor-pointer">
               <Bell className="w-5 h-5" />
@@ -124,8 +122,6 @@ export function DashboardLayout() {
 
         <main className="relative z-0 flex-1 p-4 lg:p-8 overflow-auto"><Outlet /></main>
       </div>
-
-      <WalletConnectModal open={walletModalOpen} onClose={() => setWalletModalOpen(false)} />
     </div>
   )
 }

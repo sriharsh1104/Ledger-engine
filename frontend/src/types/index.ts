@@ -45,22 +45,6 @@ export interface LedgerAudit {
   lastVerified: string
 }
 
-export interface CryptoWalletProvider {
-  id: string
-  name: string
-  icon: string
-  color: string
-}
-
-export interface ConnectedCryptoWallet {
-  id: string
-  providerId: string
-  providerName: string
-  address: string
-  balance: number
-  connectedAt: string
-}
-
 export interface PhoneCountry {
   code: string
   dial: string
