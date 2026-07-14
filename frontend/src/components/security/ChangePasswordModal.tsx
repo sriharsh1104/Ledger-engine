@@ -3,21 +3,20 @@ import { CheckCircle } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
-import * as authApi from '../../lib/auth'
+import { useAuth } from '../../hooks/useAuth'
 
 interface ChangePasswordModalProps {
   open: boolean
   onClose: () => void
-  userId: string
 }
 
-export function ChangePasswordModal({ open, onClose, userId }: ChangePasswordModalProps) {
+export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps) {
+  const { changePassword, isLoading } = useAuth()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
-  const [loading, setLoading] = useState(false)
 
   function reset() {
     setCurrent('')
@@ -45,15 +44,12 @@ export function ChangePasswordModal({ open, onClose, userId }: ChangePasswordMod
       return
     }
 
-    setLoading(true)
     try {
-      await authApi.changePassword(userId, current, next)
+      await changePassword(current, next)
       setSuccess(true)
       setTimeout(() => handleClose(), 2000)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update password')
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -104,7 +100,7 @@ export function ChangePasswordModal({ open, onClose, userId }: ChangePasswordMod
             <Button type="button" variant="secondary" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit" loading={loading}>
+            <Button type="submit" loading={isLoading}>
               Update Password
             </Button>
           </div>

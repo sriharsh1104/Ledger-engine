@@ -9,10 +9,11 @@ function unwrap<T>(res: { data: { data: T } }) {
   return res.data.data
 }
 
-export function useProfile() {
+export function useProfile(enabled = true) {
   return useQuery({
     queryKey: queryKeys.profile.me,
     queryFn: async () => unwrap(await profileService.get()),
+    enabled,
     staleTime: 2 * 60_000,
   })
 }

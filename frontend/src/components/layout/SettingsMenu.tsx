@@ -217,7 +217,6 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
         <ChangePasswordModal
           open={showPasswordModal}
           onClose={() => setShowPasswordModal(false)}
-          userId={user.id}
         />
       )}
     </>

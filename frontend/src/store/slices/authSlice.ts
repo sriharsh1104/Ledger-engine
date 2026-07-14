@@ -8,6 +8,7 @@ interface AuthState {
   user: User | null
   token: string | null
   isLoading: boolean
+  isAuthReady: boolean
 }
 
 function loadStoredAuth(): Pick<AuthState, 'user' | 'token'> {
@@ -27,6 +28,7 @@ const initialState: AuthState = {
   user: stored.user,
   token: stored.token,
   isLoading: false,
+  isAuthReady: false,
 }
 
 const authSlice = createSlice({
@@ -57,8 +59,11 @@ const authSlice = createSlice({
       // legacy session cleanup
       localStorage.removeItem('ledger_session')
     },
+    setAuthReady(state, action: PayloadAction<boolean>) {
+      state.isAuthReady = action.payload
+    },
   },
 })
 
-export const { setLoading, setCredentials, setUser, logout } = authSlice.actions
+export const { setLoading, setCredentials, setUser, logout, setAuthReady } = authSlice.actions
 export default authSlice.reducer

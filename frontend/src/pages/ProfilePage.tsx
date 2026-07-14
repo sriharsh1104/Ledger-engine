@@ -1,20 +1,32 @@
-import { useState, useRef, type FormEvent, type ChangeEvent } from 'react'
+import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react'
 import { Camera, CheckCircle, User, Mail, Phone, Lock } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
+import { useProfile } from '../hooks/api'
+import { config } from '../lib/config'
 import { PHONE_COUNTRIES } from '../lib/profile'
+import { AuthLoadingScreen } from '../components/auth/AuthLoadingScreen'
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 
 export function ProfilePage() {
   const { user, updateProfile, isLoading } = useAuth()
+  const profileQuery = useProfile(!config.useMockApi && !!user)
+  const profileUser = config.useMockApi ? user : (profileQuery.data ?? user)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [profileImage, setProfileImage] = useState(user?.profileImage ?? '')
-  const [phoneCode, setPhoneCode] = useState(user?.phoneCode ?? '+91')
-  const [phoneNumber, setPhoneNumber] = useState(user?.phoneNumber ?? '')
+  const [profileImage, setProfileImage] = useState('')
+  const [phoneCode, setPhoneCode] = useState('+91')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!profileUser) return
+    setProfileImage(profileUser.profileImage ?? '')
+    setPhoneCode(profileUser.phoneCode ?? '+91')
+    setPhoneNumber(profileUser.phoneNumber ?? '')
+  }, [profileUser])
 
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -42,9 +54,25 @@ export function ProfilePage() {
       await updateProfile({ profileImage, phoneCode, phoneNumber })
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
-    } catch {
-      setError('Failed to update profile')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update profile')
     }
+  }
+
+  if (!config.useMockApi && profileQuery.isLoading && !profileUser) {
+    return <AuthLoadingScreen />
+  }
+
+  if (!config.useMockApi && profileQuery.isError) {
+    return (
+      <div className="max-w-2xl mx-auto animate-fade-in">
+        <div className="rounded-xl bg-danger/10 border border-danger/30 px-4 py-3 text-sm text-danger">
+          {profileQuery.error instanceof Error
+            ? profileQuery.error.message
+            : 'Failed to load profile'}
+        </div>
+      </div>
+    )
   }
 
   const selectClass =
@@ -88,7 +116,7 @@ export function ProfilePage() {
                 />
               ) : (
                 <div className="w-20 h-20 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-2xl border-2 border-accent/30">
-                  {user?.name?.charAt(0).toUpperCase()}
+                  {profileUser?.name?.charAt(0).toUpperCase()}
                 </div>
               )}
               <button
@@ -129,7 +157,7 @@ export function ProfilePage() {
                 <Lock className="w-3 h-3 text-slate-500 ml-1" />
               </label>
               <div className="w-full rounded-xl bg-surface-overlay/50 border border-border px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed">
-                {user?.name}
+                {profileUser?.name}
               </div>
             </div>
 
@@ -139,7 +167,7 @@ export function ProfilePage() {
                 <Lock className="w-3 h-3 text-slate-500 ml-1" />
               </label>
               <div className="w-full rounded-xl bg-surface-overlay/50 border border-border px-4 py-2.5 text-sm text-slate-400 cursor-not-allowed">
-                {user?.email}
+                {profileUser?.email}
               </div>
             </div>
           </div>

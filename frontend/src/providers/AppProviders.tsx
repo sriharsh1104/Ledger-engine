@@ -6,6 +6,7 @@ import { queryClient } from '../lib/queryClient'
 import { useAppDispatch } from '../store/hooks'
 import { setCredentials } from '../store/slices/authSlice'
 import { getSession } from '../lib/auth'
+import { AuthBootstrap } from '../components/auth/AuthBootstrap'
 
 function LegacyAuthMigration({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch()
@@ -27,7 +28,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <LegacyAuthMigration>{children}</LegacyAuthMigration>
+        <LegacyAuthMigration>
+          <AuthBootstrap>{children}</AuthBootstrap>
+        </LegacyAuthMigration>
       </QueryClientProvider>
     </Provider>
   )

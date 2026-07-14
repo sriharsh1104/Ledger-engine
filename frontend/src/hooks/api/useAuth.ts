@@ -3,7 +3,7 @@ import { authService } from '../../services/auth.service'
 import { queryKeys } from '../../lib/queryKeys'
 import { useAppDispatch } from '../../store/hooks'
 import { setCredentials, setLoading, logout as logoutAction } from '../../store/slices/authSlice'
-import type { LoginRequest, SignupRequest, ForgotPasswordRequest } from '../../api/types'
+import type { LoginRequest, SignupRequest, ForgotPasswordRequest, ChangePasswordRequest } from '../../api/types'
 
 function unwrap<T>(res: { data: { data: T } }) {
   return res.data.data
@@ -49,6 +49,15 @@ export function useForgotPassword() {
   return useMutation({
     mutationFn: async (data: ForgotPasswordRequest) => {
       const res = await authService.forgotPassword(data)
+      return unwrap(res)
+    },
+  })
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: async (data: ChangePasswordRequest) => {
+      const res = await authService.changePassword(data)
       return unwrap(res)
     },
   })

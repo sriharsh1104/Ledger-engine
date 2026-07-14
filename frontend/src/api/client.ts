@@ -15,8 +15,17 @@ export const apiClient = axios.create({
   },
 })
 
+const PUBLIC_AUTH_PATHS = ['/auth/login', '/auth/signup', '/auth/forgot-password'] as const
+
+function isPublicAuthRequest(url: string | undefined) {
+  if (!url) return false
+  return PUBLIC_AUTH_PATHS.some((path) => url.includes(path))
+}
+
 export function setupApiInterceptors(store: Store) {
   apiClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    if (isPublicAuthRequest(config.url)) return config
+
     const token = store.getState().auth.token
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

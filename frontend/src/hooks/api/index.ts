@@ -2,6 +2,7 @@ export {
   useLogin,
   useSignup,
   useForgotPassword,
+  useChangePassword,
   useLogout,
   useMe,
 } from './useAuth'
