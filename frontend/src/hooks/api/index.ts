@@ -28,6 +28,7 @@ export {
   useBlockMember,
   useUnblockMember,
   useLeaveChannel,
+  useDeleteChannel,
   useSendMessage,
   useSearchChannels,
   appendChannelMessage,

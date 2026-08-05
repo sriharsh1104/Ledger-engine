@@ -61,6 +61,10 @@ export const chatService = {
   leaveChannel: (channelId: string) =>
     apiClient.post<ApiResponse<unknown>>(`${CHAT}/channels/${channelId}/leave`),
 
+  /** Owner: permanently delete a group (or conversation). */
+  deleteChannel: (channelId: string) =>
+    apiClient.delete<ApiResponse<unknown>>(`${CHAT}/channels/${channelId}`),
+
   listMembers: (channelId: string) =>
     apiClient.get<ApiResponse<ChannelMember[]>>(
       `${CHAT}/channels/${channelId}/members`,

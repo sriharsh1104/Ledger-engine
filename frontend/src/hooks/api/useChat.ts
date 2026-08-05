@@ -282,7 +282,27 @@ export function useLeaveChannel() {
       const res = await chatService.leaveChannel(channelId)
       return unwrapApiData(res)
     },
-    onSuccess: () => {
+    onSuccess: (_data, channelId) => {
+      removeChannelFromList(qc, channelId)
+      qc.removeQueries({ queryKey: queryKeys.chat.messages(channelId) })
+      qc.removeQueries({ queryKey: queryKeys.chat.members(channelId) })
+      void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+    },
+  })
+}
+
+/** Owner: delete entire group / channel. */
+export function useDeleteChannel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const res = await chatService.deleteChannel(channelId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, channelId) => {
+      removeChannelFromList(qc, channelId)
+      qc.removeQueries({ queryKey: queryKeys.chat.messages(channelId) })
+      qc.removeQueries({ queryKey: queryKeys.chat.members(channelId) })
       void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
     },
   })

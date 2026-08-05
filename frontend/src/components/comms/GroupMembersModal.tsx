@@ -3,6 +3,7 @@ import {
   Ban,
   Crown,
   Eraser,
+  LogOut,
   MoreVertical,
   Shield,
   ShieldOff,
@@ -20,6 +21,7 @@ import {
   useBlockMember,
   useChannelMembers,
   useDeleteUserMessages,
+  useLeaveChannel,
   useRemoveMember,
   useUnblockMember,
   useUpdateMemberRole,
@@ -45,6 +47,8 @@ interface GroupMembersModalProps {
   currentUserId?: string
   contacts: User[]
   onBanner?: (message: string) => void
+  /** Called after current user successfully leaves the group */
+  onLeft?: () => void
 }
 
 type PendingAction =
@@ -52,6 +56,7 @@ type PendingAction =
   | { type: 'clear'; userId: string; name: string }
   | { type: 'block'; userId: string; name: string }
   | { type: 'unblock'; userId: string; name: string }
+  | { type: 'leave'; userId: string; name: string }
   | null
 
 function roleRank(role: string) {
@@ -105,6 +110,7 @@ export function GroupMembersModal({
   currentUserId,
   contacts,
   onBanner,
+  onLeft,
 }: GroupMembersModalProps) {
   const membersQuery = useChannelMembers(channelId, open && !!channelId)
   const removeMember = useRemoveMember()
@@ -113,6 +119,7 @@ export function GroupMembersModal({
   const deleteMsgs = useDeleteUserMessages()
   const blockMember = useBlockMember()
   const unblockMember = useUnblockMember()
+  const leaveChannel = useLeaveChannel()
 
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingAction>(null)
@@ -202,6 +209,11 @@ export function GroupMembersModal({
             : [...prev, { userId: pending.userId, name: pending.name }],
         )
         onBanner?.(`Blocked ${pending.name}`)
+      } else if (pending.type === 'leave') {
+        await leaveChannel.mutateAsync(channelId)
+        onBanner?.('You left the group')
+        onClose()
+        onLeft?.()
       } else if (pending.type === 'unblock') {
         await unblockMember.mutateAsync({
           channelId,
@@ -244,32 +256,47 @@ export function GroupMembersModal({
     }
   }
 
-  const confirmCopy = pending
-    ? pending.type === 'kick'
-      ? {
+  const confirmCopy = (() => {
+    if (!pending) return null
+    switch (pending.type) {
+      case 'kick':
+        return {
           title: `Remove ${pending.name}?`,
-          message: 'They will leave this group. They can rejoin with an invite unless blocked.',
+          message:
+            'They will leave this group. They can rejoin with an invite unless blocked.',
           confirmLabel: 'Remove',
         }
-      : pending.type === 'clear'
-        ? {
-            title: `Delete ${pending.name}'s messages?`,
-            message: 'All of their messages in this group will be removed for everyone.',
-            confirmLabel: 'Delete messages',
-          }
-        : pending.type === 'block'
-          ? {
-              title: `Block ${pending.name}?`,
-              message:
-                'They are removed from the group and cannot find or join it via search, invite link, QR, or code.',
-              confirmLabel: 'Block',
-            }
-          : {
-              title: `Unblock ${pending.name}?`,
-              message: 'They can join again with an invite. They are not re-added automatically.',
-              confirmLabel: 'Unblock',
-            }
-    : null
+      case 'clear':
+        return {
+          title: `Delete ${pending.name}'s messages?`,
+          message:
+            'All of their messages in this group will be removed for everyone.',
+          confirmLabel: 'Delete messages',
+        }
+      case 'block':
+        return {
+          title: `Block ${pending.name}?`,
+          message:
+            'They are removed from the group and cannot find or join it via search, invite link, QR, or code.',
+          confirmLabel: 'Block',
+        }
+      case 'leave':
+        return {
+          title: 'Leave this group?',
+          message:
+            'You will leave this group and it will disappear from your sidebar. You can rejoin with an invite.',
+          confirmLabel: 'Leave group',
+        }
+      case 'unblock':
+      default:
+        return {
+          title: `Unblock ${pending.name}?`,
+          message:
+            'They can join again with an invite. They are not re-added automatically.',
+          confirmLabel: 'Unblock',
+        }
+    }
+  })()
 
   return (
     <>
@@ -340,6 +367,7 @@ export function GroupMembersModal({
                 const showKick = canKick(myRole, m.role, isSelf)
                 const showModTools = canModerate(myRole) && !isSelf && m.role !== 'owner'
                 const showRoleToggle = myRole === 'owner' && !isSelf && m.role !== 'owner'
+                const showLeave = isSelf && myRole !== 'owner'
                 const openMenu = menuFor === m.userId
                 const presence = resolveUserStatus(
                   m.userId,
@@ -375,6 +403,25 @@ export function GroupMembersModal({
                         )}
                       </div>
                     </div>
+                    {showLeave && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="danger"
+                        disabled={busyId === m.userId}
+                        onClick={() =>
+                          setPending({
+                            type: 'leave',
+                            userId: m.userId,
+                            name,
+                          })
+                        }
+                        title="Leave group"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        Leave
+                      </Button>
+                    )}
                     {(showKick || showModTools || showRoleToggle) && (
                       <div className="relative shrink-0">
                         <button

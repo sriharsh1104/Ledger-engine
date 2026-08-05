@@ -6,6 +6,8 @@ import {
   Phone,
   MessageCircle,
   Eraser,
+  LogOut,
+  Trash2,
   UserPlus,
   Users,
 } from 'lucide-react'
@@ -21,6 +23,8 @@ import {
   useJoinChannel,
   useJoinByInviteCode,
   useClearMessages,
+  useLeaveChannel,
+  useDeleteChannel,
   useSendMessage,
   appendChannelMessage,
   clearChannelMessages,
@@ -97,6 +101,9 @@ export function ChatPage() {
   /** channelId → peer user (for DM labels) */
   const [dmPeers, setDmPeers] = useState<Record<string, User>>({})
   const [confirmClear, setConfirmClear] = useState(false)
+  const [confirmChannelAction, setConfirmChannelAction] = useState<
+    null | 'leave' | 'delete-dm' | 'delete-group'
+  >(null)
 
   const [modal, setModal] = useState<
     | null
@@ -121,6 +128,8 @@ export function ChatPage() {
   const joinChannel = useJoinChannel()
   const joinByInvite = useJoinByInviteCode()
   const clearMessages = useClearMessages()
+  const leaveChannel = useLeaveChannel()
+  const deleteChannel = useDeleteChannel()
   const createRoom = useCreateVoiceRoom()
   const joinRoom = useJoinVoiceRoom()
   const startDirectCall = useStartDirectCall()
@@ -134,6 +143,10 @@ export function ChatPage() {
   const contacts = contactsQuery.data ?? []
   const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? null
   const selectedMessages = messagesQuery.data ?? []
+  const isChannelOwner =
+    !!user?.id &&
+    !!selectedChannel &&
+    selectedChannel.createdBy === user.id
 
   const rememberDmPeer = useCallback((channelId: string, peer: User) => {
     setDmPeers((prev) => {
@@ -767,6 +780,40 @@ export function ChatPage() {
                   <Eraser className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Clear</span>
                 </Button>
+                {selectedChannel.kind === 'direct' ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={leaveChannel.isPending || deleteChannel.isPending}
+                    onClick={() => setConfirmChannelAction('delete-dm')}
+                    title="Delete chat"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
+                ) : isChannelOwner ? (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={deleteChannel.isPending}
+                    onClick={() => setConfirmChannelAction('delete-group')}
+                    title="Delete group"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    loading={leaveChannel.isPending}
+                    onClick={() => setConfirmChannelAction('leave')}
+                    title="Leave group"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Leave</span>
+                  </Button>
+                )}
               </header>
 
               <MessagePanel
@@ -900,6 +947,7 @@ export function ChatPage() {
         currentUserId={user?.id}
         contacts={contacts}
         onBanner={setBanner}
+        onLeft={() => setSelectedChannelId(null)}
       />
 
       <ConfirmModal
@@ -923,6 +971,66 @@ export function ChatPage() {
               setBanner(getApiErrorMessage(err))
             } finally {
               setConfirmClear(false)
+            }
+          })()
+        }}
+      />
+
+      <ConfirmModal
+        open={confirmChannelAction !== null}
+        onClose={() => setConfirmChannelAction(null)}
+        title={
+          confirmChannelAction === 'delete-group'
+            ? 'Delete this group?'
+            : confirmChannelAction === 'delete-dm'
+              ? 'Delete this chat?'
+              : 'Leave this group?'
+        }
+        message={
+          confirmChannelAction === 'delete-group'
+            ? 'The group and all its messages will be permanently deleted for everyone. This cannot be undone.'
+            : confirmChannelAction === 'delete-dm'
+              ? 'This removes the chat from your list. You can start a new DM later.'
+              : 'You will leave this group and it will disappear from your sidebar. You can rejoin with an invite.'
+        }
+        confirmLabel={
+          confirmChannelAction === 'leave' ? 'Leave group' : 'Delete'
+        }
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          void (async () => {
+            if (!selectedChannelId || !confirmChannelAction) return
+            const action = confirmChannelAction
+            const channelName = selectedChannel?.name
+            try {
+              if (action === 'delete-group') {
+                await deleteChannel.mutateAsync(selectedChannelId)
+                setBanner(
+                  channelName
+                    ? `Deleted group #${channelName}`
+                    : 'Group deleted',
+                )
+              } else if (action === 'delete-dm') {
+                try {
+                  await deleteChannel.mutateAsync(selectedChannelId)
+                } catch {
+                  // Some gateways only support leave for DMs
+                  await leaveChannel.mutateAsync(selectedChannelId)
+                }
+                setBanner('Chat deleted')
+              } else {
+                await leaveChannel.mutateAsync(selectedChannelId)
+                setBanner(
+                  channelName
+                    ? `Left #${channelName}`
+                    : 'Left the group',
+                )
+              }
+              setSelectedChannelId(null)
+            } catch (err) {
+              setBanner(getApiErrorMessage(err))
+            } finally {
+              setConfirmChannelAction(null)
             }
           })()
         }}
