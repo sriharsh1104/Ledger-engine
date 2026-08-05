@@ -13,6 +13,9 @@ import { TransferPage } from './pages/TransferPage'
 import { LedgerPage } from './pages/LedgerPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { TwoFactorPage } from './pages/TwoFactorPage'
+import { AssistantPage } from './pages/AssistantPage'
+import { ChatPage } from './pages/ChatPage'
+import { ChatWidget } from './components/chat/ChatWidget'
 
 export default function App() {
   return (
@@ -22,7 +25,7 @@ export default function App() {
           <AppKitThemeSync />
           <BrowserRouter>
             <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<Navigate to="/messages" replace />} />
 
               <Route element={<PublicRoute />}>
                 <Route path="/login" element={<Login />} />
@@ -32,16 +35,19 @@ export default function App() {
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<DashboardLayout />}>
+                  <Route path="/messages" element={<ChatPage />} />
                   <Route path="/dashboard" element={<DashboardOverview />} />
                   <Route path="/transfer" element={<TransferPage />} />
                   <Route path="/ledger" element={<LedgerPage />} />
+                  <Route path="/assistant" element={<AssistantPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
                   <Route path="/security/2fa" element={<TwoFactorPage />} />
                 </Route>
               </Route>
 
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/messages" replace />} />
             </Routes>
+            <ChatWidget />
           </BrowserRouter>
         </Web3Provider>
       </ThemeProvider>

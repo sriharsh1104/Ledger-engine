@@ -20,4 +20,22 @@ export const queryKeys = {
   profile: {
     me: ['profile', 'me'] as const,
   },
+  chat: {
+    channels: (params?: { limit?: number; offset?: number }) =>
+      ['chat', 'channels', params] as const,
+    channel: (id: string) => ['chat', 'channel', id] as const,
+    messages: (channelId: string) => ['chat', 'messages', channelId] as const,
+  },
+  voice: {
+    rooms: (params?: { limit?: number; offset?: number }) =>
+      ['voice', 'rooms', params] as const,
+    room: (id: string) => ['voice', 'room', id] as const,
+    members: (roomId: string) => ['voice', 'members', roomId] as const,
+  },
+  contacts: {
+    list: (params?: { limit?: number; offset?: number }) =>
+      ['contacts', 'list', params] as const,
+    userSearch: (q: string) => ['contacts', 'users', 'search', q] as const,
+    contactSearch: (q: string) => ['contacts', 'search', q] as const,
+  },
 } as const

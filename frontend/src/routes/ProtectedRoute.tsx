@@ -12,6 +12,6 @@ export function ProtectedRoute() {
 export function PublicRoute() {
   const { isAuthenticated, isAuthReady } = useAuth()
   if (!isAuthReady) return <AuthLoadingScreen />
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  if (isAuthenticated) return <Navigate to="/messages" replace />
   return <Outlet />
 }

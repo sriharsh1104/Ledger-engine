@@ -4,6 +4,8 @@ import {
   LayoutDashboard,
   ArrowLeftRight,
   BookOpen,
+  MessageSquare,
+  MessagesSquare,
   Bell,
   Menu,
   X,
@@ -15,9 +17,11 @@ import { ThemeToggle } from '../ui/ThemeToggle'
 import { HeaderWalletButton } from '../wallet/HeaderWalletButton'
 
 const navItems = [
+  { to: '/messages', label: 'Messages', icon: MessagesSquare },
   { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { to: '/transfer', label: 'Transfer', icon: ArrowLeftRight },
   { to: '/ledger', label: 'Ledger Audit', icon: BookOpen },
+  { to: '/assistant', label: 'AI Assistant', icon: MessageSquare },
 ]
 
 export function DashboardLayout() {
@@ -51,7 +55,7 @@ export function DashboardLayout() {
             </div>
             <div>
               <p className="font-bold text-white text-sm">Ledger Engine</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Banking</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Chat · Calls · Ledger</p>
             </div>
           </div>
           <button className="lg:hidden text-slate-400" onClick={() => setSidebarOpen(false)}>
@@ -64,7 +68,7 @@ export function DashboardLayout() {
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === '/dashboard'}
+                  end={item.to === '/messages' || item.to === '/dashboard'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
@@ -120,7 +124,11 @@ export function DashboardLayout() {
           </div>
         </header>
 
-        <main className="relative z-0 flex-1 p-4 lg:p-8 overflow-auto"><Outlet /></main>
+        <main className="relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
+          <div className="flex-1 min-h-0 overflow-auto p-4 lg:p-8 flex flex-col">
+            <Outlet />
+          </div>
+        </main>
       </div>
     </div>
   )
