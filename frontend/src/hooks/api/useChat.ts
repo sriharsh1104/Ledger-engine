@@ -7,6 +7,7 @@ import type {
   ChatMessage,
   CreateChannelRequest,
   CreateDirectChannelRequest,
+  JoinChannelRequest,
 } from '../../api/comms.types'
 
 export function useChannels(params?: { limit?: number; offset?: number }) {
@@ -14,6 +15,18 @@ export function useChannels(params?: { limit?: number; offset?: number }) {
     queryKey: queryKeys.chat.channels(params),
     queryFn: async () => {
       const res = await chatService.listChannels(params ?? { limit: 50 })
+      return unwrapApiData(res) ?? []
+    },
+  })
+}
+
+export function useSearchChannels(q: string, enabled = true) {
+  const trimmed = q.trim()
+  return useQuery({
+    queryKey: queryKeys.chat.search(trimmed),
+    enabled: enabled && trimmed.length >= 1,
+    queryFn: async () => {
+      const res = await chatService.searchChannels(trimmed)
       return unwrapApiData(res) ?? []
     },
   })
@@ -66,11 +79,16 @@ export function useJoinChannel() {
     mutationFn: async ({
       channelId,
       inviteCode,
+      password,
     }: {
       channelId: string
       inviteCode?: string
-    }) => {
-      const res = await chatService.joinChannel(channelId, inviteCode)
+      password?: string
+    } & JoinChannelRequest) => {
+      const res = await chatService.joinChannel(channelId, {
+        inviteCode,
+        password,
+      })
       return unwrapApiData(res)
     },
     onSuccess: () => {

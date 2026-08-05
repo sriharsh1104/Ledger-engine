@@ -1,10 +1,13 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { ChatMessage } from '../../api/comms.types'
 import type { User } from '../../types'
+import { resolvePeerLabel } from '../../lib/displayName'
 
 interface MessagePanelProps {
   messages: ChatMessage[]
   currentUser: User | null
+  /** Saved contacts — use contact-list name when present */
+  contacts?: User[]
   loading?: boolean
   emptyHint?: string
 }
@@ -47,6 +50,7 @@ function dayLabel(iso: string) {
 export function MessagePanel({
   messages,
   currentUser,
+  contacts = [],
   loading,
   emptyHint = 'No messages yet — say hello',
 }: MessagePanelProps) {
@@ -55,6 +59,11 @@ export function MessagePanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
+
+  const contactIds = useMemo(
+    () => new Set(contacts.map((c) => c.id)),
+    [contacts],
+  )
 
   if (loading) {
     return (
@@ -78,8 +87,33 @@ export function MessagePanel({
         const prev = messages[i - 1]
         const showDay = !prev || !sameDay(prev.createdAt, msg.createdAt)
         const isMine = msg.senderId === currentUser?.id
-        const name = msg.sender?.name ?? (isMine ? currentUser?.name : msg.senderId.slice(0, 8))
-        const initial = (name ?? '?').charAt(0).toUpperCase()
+
+        const senderUser: User | undefined = msg.sender
+          ? {
+              ...msg.sender,
+              isContact:
+                msg.sender.isContact === true || contactIds.has(msg.senderId),
+            }
+          : contactIds.has(msg.senderId)
+            ? contacts.find((c) => c.id === msg.senderId)
+            : undefined
+
+        const display = isMine
+          ? { title: 'You', isContact: false as const }
+          : resolvePeerLabel(
+              senderUser ?? {
+                id: msg.senderId,
+                name: msg.senderId.slice(0, 8),
+                email: '',
+              },
+              contacts,
+            )
+
+        const initial = display.title.charAt(0).toUpperCase()
+        const avatarSrc = display.isContact
+          ? contacts.find((c) => c.id === msg.senderId)?.profileImage ||
+            msg.sender?.profileImage
+          : undefined
 
         return (
           <div key={msg.id}>
@@ -99,9 +133,9 @@ export function MessagePanel({
             >
               {!isMine && (
                 <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-semibold shrink-0 overflow-hidden">
-                  {msg.sender?.profileImage ? (
+                  {avatarSrc ? (
                     <img
-                      src={msg.sender.profileImage}
+                      src={avatarSrc}
                       alt=""
                       className="w-full h-full object-cover"
                     />
@@ -118,9 +152,16 @@ export function MessagePanel({
                 }`}
               >
                 {!isMine && (
-                  <p className="mb-0.5 text-xs font-semibold text-accent truncate">
-                    {name}
-                  </p>
+                  <div className="mb-0.5 min-w-0">
+                    <p className="text-xs font-semibold text-accent truncate">
+                      {display.title}
+                    </p>
+                    {display.isContact && display.subtitle && (
+                      <p className="text-[10px] text-slate-500 truncate">
+                        {display.subtitle}
+                      </p>
+                    )}
+                  </div>
                 )}
                 <div className="flex items-end gap-2">
                   <p className="min-w-0 text-sm whitespace-pre-wrap break-words leading-relaxed">

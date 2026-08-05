@@ -1,11 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import {
-  Shield,
-  LayoutDashboard,
-  ArrowLeftRight,
-  BookOpen,
-  MessageSquare,
   MessagesSquare,
+  MessageSquare,
+  Phone,
   Bell,
   Menu,
   X,
@@ -14,13 +11,10 @@ import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
 import { SettingsMenu } from './SettingsMenu'
 import { ThemeToggle } from '../ui/ThemeToggle'
-import { HeaderWalletButton } from '../wallet/HeaderWalletButton'
 
 const navItems = [
   { to: '/messages', label: 'Messages', icon: MessagesSquare },
-  { to: '/dashboard', label: 'Overview', icon: LayoutDashboard },
-  { to: '/transfer', label: 'Transfer', icon: ArrowLeftRight },
-  { to: '/ledger', label: 'Ledger Audit', icon: BookOpen },
+  { to: '/calls', label: 'Call history', icon: Phone },
   { to: '/assistant', label: 'AI Assistant', icon: MessageSquare },
 ]
 
@@ -51,11 +45,11 @@ export function DashboardLayout() {
         <div className="p-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-accent flex items-center justify-center">
-              <Shield className="w-5 h-5 text-white" />
+              <MessagesSquare className="w-5 h-5 text-white" />
             </div>
             <div>
-              <p className="font-bold text-white text-sm">Ledger Engine</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Chat · Calls · Ledger</p>
+              <p className="font-bold text-white text-sm">Connect</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">Chat · Voice · Groups</p>
             </div>
           </div>
           <button className="lg:hidden text-slate-400" onClick={() => setSidebarOpen(false)}>
@@ -68,7 +62,7 @@ export function DashboardLayout() {
             <NavLink
               key={item.to}
               to={item.to}
-                  end={item.to === '/messages' || item.to === '/dashboard'}
+              end={item.to === '/messages'}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200
@@ -112,8 +106,6 @@ export function DashboardLayout() {
           <div className="hidden lg:block" />
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <HeaderWalletButton />
-
             <button className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-surface-overlay transition-colors cursor-pointer">
               <Bell className="w-5 h-5" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent rounded-full" />

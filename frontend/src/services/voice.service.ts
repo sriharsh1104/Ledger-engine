@@ -1,8 +1,10 @@
 import { apiClient } from '../api/client'
 import type { ApiResponse } from '../api/types'
 import type {
+  CallHistoryEntry,
   CallSession,
   CreateVoiceRoomRequest,
+  JoinVoiceRoomRequest,
   LiveKitCredentials,
   RespondCallRequest,
   RoomSession,
@@ -15,6 +17,7 @@ import type { User } from '../types'
 const VOICE = '/voice'
 
 export const voiceService = {
+  /** Public voice lobbies only — private rooms are invite+password */
   listRooms: (params?: { limit?: number; offset?: number }) =>
     apiClient.get<ApiResponse<VoiceRoom[]>>(`${VOICE}/rooms`, { params }),
 
@@ -24,9 +27,10 @@ export const voiceService = {
   createRoom: (data: CreateVoiceRoomRequest) =>
     apiClient.post<ApiResponse<RoomSession>>(`${VOICE}/rooms`, data),
 
-  joinRoom: (roomId: string, inviteCode = '') =>
+  joinRoom: (roomId: string, data: JoinVoiceRoomRequest = {}) =>
     apiClient.post<ApiResponse<RoomSession>>(`${VOICE}/rooms/${roomId}/join`, {
-      inviteCode,
+      inviteCode: data.inviteCode ?? '',
+      ...(data.password ? { password: data.password } : {}),
     }),
 
   leaveRoom: (roomId: string) =>
@@ -59,4 +63,11 @@ export const voiceService = {
     apiClient.post<ApiResponse<unknown>>(`${VOICE}/calls/${roomId}/invite`, {
       peerUserId,
     }),
+
+  /** Call history for the authenticated user only. */
+  getCallHistory: (params?: { limit?: number; offset?: number }) =>
+    apiClient.get<ApiResponse<CallHistoryEntry[]>>(
+      `${VOICE}/calls/history`,
+      { params },
+    ),
 }

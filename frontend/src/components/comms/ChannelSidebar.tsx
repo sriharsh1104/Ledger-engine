@@ -1,4 +1,4 @@
-import { Hash, Lock, MessageCircle, Plus, Phone, Radio, Users } from 'lucide-react'
+import { Hash, Lock, MessageCircle, Plus, Phone, Radio, Search, Users } from 'lucide-react'
 import type { Channel, VoiceRoom } from '../../api/comms.types'
 
 interface ChannelSidebarProps {
@@ -7,26 +7,36 @@ interface ChannelSidebarProps {
   selectedChannelId: string | null
   selectedRoomId: string | null
   wsConnected: boolean
+  /** Resolve sidebar label (esp. DMs → peer username / contact name) */
+  channelLabel: (channel: Channel) => string
   onSelectChannel: (id: string) => void
   onSelectRoom: (id: string) => void
   onNewChannel: () => void
   onNewDm: () => void
-  onJoinChannel: () => void
+  onFindGroups: () => void
+  onJoinPrivateChannel: () => void
   onNewRoom: () => void
-  onJoinRoom: () => void
+  onJoinPrivateRoom: () => void
   onOpenContacts: () => void
 }
 
 function ChannelRow({
   channel,
+  label,
   active,
   onClick,
 }: {
   channel: Channel
+  label: string
   active: boolean
   onClick: () => void
 }) {
-  const Icon = channel.kind === 'direct' ? MessageCircle : channel.visibility === 'private' ? Lock : Hash
+  const Icon =
+    channel.kind === 'direct'
+      ? MessageCircle
+      : channel.visibility === 'private'
+        ? Lock
+        : Hash
   return (
     <button
       type="button"
@@ -38,7 +48,7 @@ function ChannelRow({
         }`}
     >
       <Icon className="w-4 h-4 shrink-0 opacity-70" />
-      <span className="truncate flex-1">{channel.name || 'Direct message'}</span>
+      <span className="truncate flex-1">{label}</span>
       {channel.memberCount > 0 && (
         <span className="text-[10px] text-slate-500 tabular-nums">{channel.memberCount}</span>
       )}
@@ -52,13 +62,15 @@ export function ChannelSidebar({
   selectedChannelId,
   selectedRoomId,
   wsConnected,
+  channelLabel,
   onSelectChannel,
   onSelectRoom,
   onNewChannel,
   onNewDm,
-  onJoinChannel,
+  onFindGroups,
+  onJoinPrivateChannel,
   onNewRoom,
-  onJoinRoom,
+  onJoinPrivateRoom,
   onOpenContacts,
 }: ChannelSidebarProps) {
   const groups = channels.filter((c) => c.kind !== 'direct')
@@ -92,20 +104,28 @@ export function ChannelSidebar({
         <section>
           <div className="flex items-center justify-between px-2 mb-1">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Channels
+              My groups
             </p>
             <div className="flex gap-0.5">
               <button
                 type="button"
-                title="Join channel"
-                onClick={onJoinChannel}
+                title="Find public groups"
+                onClick={onFindGroups}
+                className="p-1 rounded text-slate-500 hover:text-white hover:bg-surface-overlay cursor-pointer"
+              >
+                <Search className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                title="Join with invite code"
+                onClick={onJoinPrivateChannel}
                 className="p-1 rounded text-slate-500 hover:text-white hover:bg-surface-overlay cursor-pointer"
               >
                 <Radio className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
-                title="New channel"
+                title="New group"
                 onClick={onNewChannel}
                 className="p-1 rounded text-slate-500 hover:text-white hover:bg-surface-overlay cursor-pointer"
               >
@@ -115,12 +135,15 @@ export function ChannelSidebar({
           </div>
           <div className="space-y-0.5">
             {groups.length === 0 && (
-              <p className="px-2 py-2 text-xs text-slate-600">No channels yet</p>
+              <p className="px-2 py-2 text-xs text-slate-600">
+                No groups yet — create or find one
+              </p>
             )}
             {groups.map((c) => (
               <ChannelRow
                 key={c.id}
                 channel={c}
+                label={channelLabel(c)}
                 active={c.id === selectedChannelId}
                 onClick={() => onSelectChannel(c.id)}
               />
@@ -150,6 +173,7 @@ export function ChannelSidebar({
               <ChannelRow
                 key={c.id}
                 channel={c}
+                label={channelLabel(c)}
                 active={c.id === selectedChannelId}
                 onClick={() => onSelectChannel(c.id)}
               />
@@ -160,16 +184,16 @@ export function ChannelSidebar({
         <section>
           <div className="flex items-center justify-between px-2 mb-1">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Voice rooms
+              Public voice rooms
             </p>
             <div className="flex gap-0.5">
               <button
                 type="button"
-                title="Join room"
-                onClick={onJoinRoom}
+                title="Join private room (code + password)"
+                onClick={onJoinPrivateRoom}
                 className="p-1 rounded text-slate-500 hover:text-white hover:bg-surface-overlay cursor-pointer"
               >
-                <Phone className="w-3.5 h-3.5" />
+                <Lock className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"

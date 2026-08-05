@@ -4,6 +4,7 @@ import { queryKeys } from '../../lib/queryKeys'
 import { unwrapApiData } from '../../lib/apiUtils'
 import type {
   CreateVoiceRoomRequest,
+  JoinVoiceRoomRequest,
   StartDirectCallRequest,
   StartGroupCallRequest,
 } from '../../api/comms.types'
@@ -16,6 +17,20 @@ export function useVoiceRooms(params?: { limit?: number; offset?: number }) {
       return unwrapApiData(res) ?? []
     },
   })
+}
+
+export function useCallHistory(params?: { limit?: number; offset?: number }) {
+  return useQuery({
+    queryKey: queryKeys.voice.callHistory(params),
+    queryFn: async () => {
+      const res = await voiceService.getCallHistory(params ?? { limit: 50 })
+      return unwrapApiData(res) ?? []
+    },
+  })
+}
+
+function invalidateCallHistory(qc: ReturnType<typeof useQueryClient>) {
+  void qc.invalidateQueries({ queryKey: ['voice', 'calls', 'history'] })
 }
 
 export function useCreateVoiceRoom() {
@@ -37,11 +52,11 @@ export function useJoinVoiceRoom() {
     mutationFn: async ({
       roomId,
       inviteCode,
+      password,
     }: {
       roomId: string
-      inviteCode?: string
-    }) => {
-      const res = await voiceService.joinRoom(roomId, inviteCode)
+    } & JoinVoiceRoomRequest) => {
+      const res = await voiceService.joinRoom(roomId, { inviteCode, password })
       return unwrapApiData(res)
     },
     onSuccess: () => {
@@ -51,24 +66,29 @@ export function useJoinVoiceRoom() {
 }
 
 export function useStartDirectCall() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (data: StartDirectCallRequest) => {
       const res = await voiceService.startDirectCall(data)
       return unwrapApiData(res)
     },
+    onSuccess: () => invalidateCallHistory(qc),
   })
 }
 
 export function useStartGroupCall() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (data: StartGroupCallRequest) => {
       const res = await voiceService.startGroupCall(data)
       return unwrapApiData(res)
     },
+    onSuccess: () => invalidateCallHistory(qc),
   })
 }
 
 export function useRespondCall() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async ({
       roomId,
@@ -80,15 +100,18 @@ export function useRespondCall() {
       const res = await voiceService.respondCall(roomId, { accept })
       return unwrapApiData(res)
     },
+    onSuccess: () => invalidateCallHistory(qc),
   })
 }
 
 export function useEndCall() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: async (roomId: string) => {
       const res = await voiceService.endCall(roomId)
       return unwrapApiData(res)
     },
+    onSuccess: () => invalidateCallHistory(qc),
   })
 }
 

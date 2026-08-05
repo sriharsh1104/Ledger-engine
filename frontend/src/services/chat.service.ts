@@ -5,6 +5,7 @@ import type {
   ChatMessage,
   CreateChannelRequest,
   CreateDirectChannelRequest,
+  JoinChannelRequest,
   SendMessageRequest,
 } from '../api/comms.types'
 
@@ -13,6 +14,12 @@ const CHAT = '/chat'
 export const chatService = {
   listChannels: (params?: { limit?: number; offset?: number }) =>
     apiClient.get<ApiResponse<Channel[]>>(`${CHAT}/channels`, { params }),
+
+  /** Discover public groups by name — does not auto-join */
+  searchChannels: (q: string, limit = 20) =>
+    apiClient.get<ApiResponse<Channel[]>>(`${CHAT}/channels/search`, {
+      params: { q, limit },
+    }),
 
   getChannel: (channelId: string) =>
     apiClient.get<ApiResponse<Channel>>(`${CHAT}/channels/${channelId}`),
@@ -23,10 +30,14 @@ export const chatService = {
   createDirect: (data: CreateDirectChannelRequest) =>
     apiClient.post<ApiResponse<Channel>>(`${CHAT}/channels/direct`, data),
 
-  joinChannel: (channelId: string, inviteCode = '') =>
-    apiClient.post<ApiResponse<Channel>>(`${CHAT}/channels/${channelId}/join`, {
-      inviteCode,
-    }),
+  joinChannel: (channelId: string, data: JoinChannelRequest = {}) =>
+    apiClient.post<ApiResponse<Channel>>(
+      `${CHAT}/channels/${channelId}/join`,
+      {
+        inviteCode: data.inviteCode ?? '',
+        ...(data.password ? { password: data.password } : {}),
+      },
+    ),
 
   leaveChannel: (channelId: string) =>
     apiClient.post<ApiResponse<unknown>>(`${CHAT}/channels/${channelId}/leave`),

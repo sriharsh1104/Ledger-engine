@@ -20,6 +20,7 @@ export interface Channel {
   inviteCode: string
   voiceRoomId?: string | null
   memberCount: number
+  hasPassword?: boolean
   createdAt: string
 }
 
@@ -47,6 +48,7 @@ export interface VoiceRoom {
   inviteCode: string
   maxParticipants: number
   memberCount: number
+  hasPassword?: boolean
   createdAt: string
 }
 
@@ -64,6 +66,9 @@ export interface Call {
   inviteCode: string
   createdAt: string
   ringingExpiresAt?: string | null
+  answeredAt?: string | null
+  endedAt?: string | null
+  durationSecs?: number | null
 }
 
 export interface CallSession {
@@ -72,14 +77,45 @@ export interface CallSession {
   livekit?: LiveKitCredentials | null
 }
 
+export type CallHistoryDirection = 'incoming' | 'outgoing'
+export type CallHistoryEvent =
+  | 'completed'
+  | 'rejected'
+  | 'missed'
+  | 'timeout'
+  | 'ended'
+  | string
+
+export interface CallHistoryPeer {
+  id: string
+  name: string
+  isContact?: boolean
+}
+
+/** Item from GET /voice/calls/history (current user only). */
+export interface CallHistoryEntry {
+  call: Call
+  direction: CallHistoryDirection
+  event: CallHistoryEvent
+  label: string
+  peers: CallHistoryPeer[]
+}
+
 export interface CreateChannelRequest {
   name: string
   visibility: 'public' | 'private'
+  /** Required by UI for private; backend stores when provided */
+  password?: string
   voiceRoomId?: string | null
 }
 
 export interface CreateDirectChannelRequest {
   peerUserId: string
+}
+
+export interface JoinChannelRequest {
+  inviteCode?: string
+  password?: string
 }
 
 export interface SendMessageRequest {
@@ -91,6 +127,13 @@ export interface CreateVoiceRoomRequest {
   visibility: 'public' | 'private'
   kind?: ChannelKind
   maxParticipants?: number
+  /** Required for private rooms (min 4 chars) */
+  password?: string
+}
+
+export interface JoinVoiceRoomRequest {
+  inviteCode?: string
+  password?: string
 }
 
 export interface StartDirectCallRequest {

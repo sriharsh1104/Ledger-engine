@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { Hash, Phone, Copy, Check } from 'lucide-react'
+import { Hash, Phone, Copy, Check, MessageCircle } from 'lucide-react'
 import { useAppSelector } from '../store/hooks'
 import { useAuth } from '../hooks/useAuth'
 import { useGatewaySocket } from '../hooks/useGatewaySocket'
@@ -20,27 +20,31 @@ import {
   useRespondCall,
   useEndCall,
   useLeaveVoiceRoom,
+  useContacts,
 } from '../hooks/api'
 import { getApiErrorMessage } from '../api/client'
 import type {
   Call,
   CallSession,
+  Channel,
   ChatMessage,
   GatewayEvent,
   LiveKitCredentials,
 } from '../api/comms.types'
+import type { User } from '../types'
+import { peerFromMessages, resolvePeerLabel } from '../lib/displayName'
 import { ChannelSidebar } from '../components/comms/ChannelSidebar'
 import { MessagePanel } from '../components/comms/MessagePanel'
 import { MessageComposer } from '../components/comms/MessageComposer'
-import { IncomingCallModal } from '../components/comms/IncomingCallModal'
+import { IncomingCallModal, PendingCallBanner } from '../components/comms/IncomingCallModal'
 import { ActiveCallBar } from '../components/comms/ActiveCallBar'
 import {
-  JoinByIdModal,
+  JoinByCodeModal,
   NewChannelModal,
   NewDmModal,
   NewRoomModal,
-  StartCallModal,
   ContactsModal,
+  FindGroupModal,
 } from '../components/comms/CommsModals'
 import { Button } from '../components/ui/Button'
 
@@ -59,23 +63,30 @@ export function ChatPage() {
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
   const [incomingCall, setIncomingCall] = useState<Call | null>(null)
+  const [incomingCaller, setIncomingCaller] = useState<User | null>(null)
+  /** Keep join UI until accept/decline/end — even if modal is dismissed */
+  const [showIncomingModal, setShowIncomingModal] = useState(true)
+  const [callBusy, setCallBusy] = useState(false)
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  /** channelId → peer user (for DM labels) */
+  const [dmPeers, setDmPeers] = useState<Record<string, User>>({})
 
   const [modal, setModal] = useState<
     | null
     | 'channel'
     | 'dm'
+    | 'find-groups'
     | 'join-channel'
     | 'room'
     | 'join-room'
-    | 'call'
     | 'contacts'
   >(null)
 
   const channelsQuery = useChannels({ limit: 50 })
   const roomsQuery = useVoiceRooms({ limit: 50 })
+  const contactsQuery = useContacts({ limit: 100 })
   const messagesQuery = useChannelMessages(selectedChannelId)
   const sendMessage = useSendMessage(selectedChannelId)
   const createChannel = useCreateChannel()
@@ -91,7 +102,69 @@ export function ChatPage() {
 
   const channels = channelsQuery.data ?? []
   const rooms = roomsQuery.data ?? []
+  const contacts = contactsQuery.data ?? []
   const selectedChannel = channels.find((c) => c.id === selectedChannelId) ?? null
+  const selectedMessages = messagesQuery.data ?? []
+
+  const rememberDmPeer = useCallback((channelId: string, peer: User) => {
+    setDmPeers((prev) => {
+      if (prev[channelId]?.id === peer.id && prev[channelId]?.name === peer.name) {
+        return prev
+      }
+      return { ...prev, [channelId]: peer }
+    })
+  }, [])
+
+  // Learn DM peer from loaded messages
+  useEffect(() => {
+    if (!selectedChannel || selectedChannel.kind !== 'direct') return
+    const peer = peerFromMessages(selectedMessages, user?.id)
+    if (peer) rememberDmPeer(selectedChannel.id, peer)
+  }, [selectedChannel, selectedMessages, user?.id, rememberDmPeer])
+
+  const channelLabel = useCallback(
+    (channel: Channel) => {
+      if (channel.kind !== 'direct') return channel.name
+      const peer = dmPeers[channel.id]
+      if (peer) return resolvePeerLabel(peer, contacts).title
+      if (channel.name && channel.name !== 'direct') return channel.name
+      return 'Direct message'
+    },
+    [contacts, dmPeers],
+  )
+
+  const selectedTitle = useMemo(() => {
+    if (!selectedChannel) return ''
+    return channelLabel(selectedChannel)
+  }, [selectedChannel, channelLabel])
+
+  const selectedPeerMeta = useMemo(() => {
+    if (!selectedChannel || selectedChannel.kind !== 'direct') return null
+    const peer = dmPeers[selectedChannel.id]
+    if (!peer) return null
+    return resolvePeerLabel(peer, contacts)
+  }, [selectedChannel, dmPeers, contacts])
+
+  const selectedPeer = selectedChannel?.kind === 'direct'
+    ? dmPeers[selectedChannel.id] ?? null
+    : null
+
+  const incomingCallerName = useMemo(() => {
+    if (!incomingCall) return 'Someone'
+    const callerId = incomingCall.callerId
+    const fromDm = Object.values(dmPeers).find((p) => p.id === callerId)
+    const fromContacts = contacts.find((c) => c.id === callerId)
+    return resolvePeerLabel(
+      fromContacts ||
+        incomingCaller ||
+        fromDm || {
+          id: callerId,
+          name: callerId.slice(0, 8),
+          email: '',
+        },
+      contacts,
+    ).title
+  }, [incomingCall, incomingCaller, dmPeers, contacts])
 
   useEffect(() => {
     if (!selectedChannelId && channelsQuery.data && channelsQuery.data.length > 0) {
@@ -139,29 +212,116 @@ export function ChatPage() {
               : (raw as { message?: ChatMessage })?.message
           if (msg?.channelId && msg?.id) {
             appendChannelMessage(qc, msg)
+            if (
+              msg.sender &&
+              msg.senderId &&
+              user?.id &&
+              msg.senderId !== user.id
+            ) {
+              rememberDmPeer(msg.channelId, msg.sender)
+            }
           }
           break
         }
         case 'voice.call_incoming': {
-          const payload = event.data as Call | CallSession
-          const call = 'call' in (payload as CallSession)
-            ? (payload as CallSession).call
-            : (payload as Call)
+          type IncomingPayload = {
+            callId?: string
+            roomId?: string
+            callerId?: string
+            caller?: User
+            inviteCode?: string
+            kind?: 'direct' | 'group'
+            ringingExpiresAt?: string
+          }
+          const payload = event.data as Call | CallSession | IncomingPayload
+          let call: Call | null = null
+
+          if ('call' in (payload as CallSession)) {
+            call = (payload as CallSession).call
+          } else if ('callId' in (payload as IncomingPayload)) {
+            const incoming = payload as IncomingPayload
+            if (incoming.callId && incoming.roomId && incoming.callerId) {
+              call = {
+                id: incoming.callId,
+                callerId: incoming.callerId,
+                calleeIds: user?.id ? [user.id] : [],
+                inviteCode: incoming.inviteCode ?? '',
+                status: 'ringing',
+                createdAt: new Date().toISOString(),
+                ringingExpiresAt: incoming.ringingExpiresAt,
+                room: {
+                  id: incoming.roomId,
+                  name: 'Direct call',
+                  createdBy: incoming.callerId,
+                  visibility: 'private',
+                  kind: incoming.kind ?? 'direct',
+                  inviteCode: incoming.inviteCode ?? '',
+                  maxParticipants: 2,
+                  memberCount: 1,
+                  hasPassword: false,
+                  createdAt: new Date().toISOString(),
+                },
+              }
+              if (incoming.caller) {
+                setIncomingCaller(incoming.caller)
+                const matchingDm = channels.find(
+                  (channel) =>
+                    channel.kind === 'direct' &&
+                    dmPeers[channel.id]?.id === incoming.callerId,
+                )
+                if (matchingDm) {
+                  rememberDmPeer(matchingDm.id, incoming.caller)
+                }
+              }
+            }
+          } else {
+            call = payload as Call
+          }
+
           if (call?.id && call.callerId !== user?.id) {
             setIncomingCall(call)
+            setShowIncomingModal(true)
           }
           break
         }
         case 'voice.call_accepted': {
-          setBanner('Call accepted')
+          setBanner('Call accepted — they’re in the voice room')
+          if (activeSession?.kind === 'call') {
+            setActiveSession((prev) =>
+              prev ? { ...prev, status: 'Connected' } : prev,
+            )
+          }
           break
         }
         case 'voice.call_rejected':
         case 'voice.call_missed':
         case 'voice.call_timeout': {
-          setBanner('Call not answered')
-          void livekit.disconnect()
-          setActiveSession(null)
+          setBanner(
+            event.type === 'voice.call_rejected'
+              ? 'Call declined'
+              : 'Call not answered',
+          )
+          setIncomingCall(null)
+          setIncomingCaller(null)
+          setShowIncomingModal(false)
+
+          // Decline / miss / timeout ends the ringing call for everyone
+          const roomId =
+            activeSession?.kind === 'call'
+              ? activeSession.roomId
+              : ((event.data as { roomId?: string } | undefined)?.roomId ?? null)
+          void (async () => {
+            try {
+              if (roomId && activeSession?.kind === 'call') {
+                await endCall.mutateAsync(roomId)
+              }
+            } catch {
+              // best-effort — already rejected on backend
+            } finally {
+              await livekit.disconnect()
+              setActiveSession(null)
+            }
+          })()
           break
         }
         case 'voice.call_ended': {
@@ -169,6 +329,8 @@ export function ChatPage() {
           void livekit.disconnect()
           setActiveSession(null)
           setIncomingCall(null)
+          setIncomingCaller(null)
+          setShowIncomingModal(false)
           break
         }
         case 'error': {
@@ -184,7 +346,16 @@ export function ChatPage() {
           break
       }
     },
-    [livekit, qc, user?.id],
+    [
+      livekit,
+      qc,
+      user?.id,
+      rememberDmPeer,
+      activeSession,
+      channels,
+      dmPeers,
+      endCall,
+    ],
   )
 
   const socket = useGatewaySocket({
@@ -219,19 +390,70 @@ export function ChatPage() {
     }
   }
 
+  async function handleSendMedia(file: File, caption: string) {
+    // The gateway currently accepts only JSON `{ body }`; it has no upload or
+    // attachment endpoint. Keep the selected file in the composer and explain
+    // what is missing instead of pretending a local blob URL is shareable.
+    const kind = file.type.startsWith('image/')
+      ? 'image'
+      : file.type.startsWith('video/')
+        ? 'video'
+        : 'audio'
+    setBanner(
+      `${kind} selected${caption ? ' with caption' : ''}, but media upload is not available on the backend yet`,
+    )
+    throw new Error('Media upload endpoint is not available')
+  }
+
+  async function handleStartDmCall() {
+    if (!selectedPeer?.id) {
+      setBanner('Open a chat message first so we know who to call')
+      return
+    }
+    if (activeSession) {
+      setBanner('Already in a call — hang up first')
+      return
+    }
+    setCallBusy(true)
+    try {
+      const session = await startDirectCall.mutateAsync({
+        peerUserId: selectedPeer.id,
+      })
+      const peerLabel = resolvePeerLabel(selectedPeer, contacts).title
+      await beginLiveSession(
+        {
+          kind: 'call',
+          roomId: session.room.id,
+          title: `Call with ${peerLabel}`,
+          status: 'Ringing… waiting for them to join',
+        },
+        session.livekit,
+      )
+      socket.subscribeVoice(session.room.id)
+      setBanner(`Calling ${peerLabel}… join option is open on their side`)
+    } catch (err) {
+      setBanner(getApiErrorMessage(err))
+    } finally {
+      setCallBusy(false)
+    }
+  }
+
   async function handleAcceptCall() {
     if (!incomingCall?.room?.id) return
+    setCallBusy(true)
     try {
       const session = await respondCall.mutateAsync({
         roomId: incomingCall.room.id,
         accept: true,
       })
       setIncomingCall(null)
+      setIncomingCaller(null)
+      setShowIncomingModal(false)
       await beginLiveSession(
         {
           kind: 'call',
           roomId: session.room.id,
-          title: session.room.name || 'Voice call',
+          title: `Call with ${incomingCallerName}`,
           status: 'Connected',
         },
         session.livekit,
@@ -239,20 +461,27 @@ export function ChatPage() {
       socket.subscribeVoice(session.room.id)
     } catch (err) {
       setBanner(getApiErrorMessage(err))
+    } finally {
+      setCallBusy(false)
     }
   }
 
   async function handleRejectCall() {
     if (!incomingCall?.room?.id) return
+    setCallBusy(true)
     try {
       await respondCall.mutateAsync({
         roomId: incomingCall.room.id,
         accept: false,
       })
-    } catch {
-      // ignore
+      setBanner('Call declined')
+    } catch (err) {
+      setBanner(getApiErrorMessage(err))
     } finally {
       setIncomingCall(null)
+      setIncomingCaller(null)
+      setShowIncomingModal(false)
+      setCallBusy(false)
     }
   }
 
@@ -294,6 +523,7 @@ export function ChatPage() {
           selectedChannelId={selectedChannelId}
           selectedRoomId={selectedRoomId}
           wsConnected={socket.connected}
+          channelLabel={channelLabel}
           onSelectChannel={(id) => {
             setSelectedChannelId(id)
             setSelectedRoomId(null)
@@ -301,9 +531,10 @@ export function ChatPage() {
           onSelectRoom={(id) => void handleSelectRoom(id)}
           onNewChannel={() => setModal('channel')}
           onNewDm={() => setModal('dm')}
-          onJoinChannel={() => setModal('join-channel')}
+          onFindGroups={() => setModal('find-groups')}
+          onJoinPrivateChannel={() => setModal('join-channel')}
           onNewRoom={() => setModal('room')}
-          onJoinRoom={() => setModal('join-room')}
+          onJoinPrivateRoom={() => setModal('join-room')}
           onOpenContacts={() => setModal('contacts')}
         />
 
@@ -325,6 +556,15 @@ export function ChatPage() {
             />
           )}
 
+          {!activeSession && incomingCall && !showIncomingModal && (
+            <PendingCallBanner
+              callerName={incomingCallerName}
+              busy={callBusy}
+              onJoin={() => void handleAcceptCall()}
+              onDecline={() => void handleRejectCall()}
+            />
+          )}
+
           {banner && (
             <div className="px-4 py-2 text-xs text-center bg-surface-overlay text-slate-300 border-b border-border-subtle">
               {banner}
@@ -334,17 +574,24 @@ export function ChatPage() {
           {selectedChannel ? (
             <>
               <header className="h-14 shrink-0 px-4 flex items-center gap-3 border-b border-border-subtle bg-surface-raised/50">
-                <Hash className="w-5 h-5 text-slate-500" />
+                {selectedChannel.kind === 'direct' ? (
+                  <MessageCircle className="w-5 h-5 text-slate-500" />
+                ) : (
+                  <Hash className="w-5 h-5 text-slate-500" />
+                )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">
-                    {selectedChannel.name}
+                    {selectedTitle}
                   </p>
                   <p className="text-[10px] text-slate-500 truncate">
-                    {selectedChannel.kind} · {selectedChannel.visibility} ·{' '}
-                    {selectedChannel.memberCount} members
+                    {selectedChannel.kind === 'direct'
+                      ? selectedPeerMeta?.isContact
+                        ? 'Contact'
+                        : 'Username'
+                      : `${selectedChannel.kind} · ${selectedChannel.visibility} · ${selectedChannel.memberCount} members`}
                   </p>
                 </div>
-                {selectedChannel.inviteCode && (
+                {selectedChannel.inviteCode && selectedChannel.kind !== 'direct' && (
                   <button
                     type="button"
                     onClick={copyInvite}
@@ -359,27 +606,42 @@ export function ChatPage() {
                     {selectedChannel.inviteCode}
                   </button>
                 )}
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => setModal('call')}
-                >
-                  <Phone className="w-3.5 h-3.5" />
-                  Call
-                </Button>
+                {selectedChannel.kind === 'direct' && (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={callBusy && !incomingCall}
+                    disabled={!!activeSession || !selectedPeer}
+                    onClick={() => void handleStartDmCall()}
+                    title={
+                      selectedPeer
+                        ? `Call ${resolvePeerLabel(selectedPeer, contacts).title}`
+                        : 'Need a chat message to identify peer'
+                    }
+                  >
+                    <Phone className="w-3.5 h-3.5" />
+                    Call
+                  </Button>
+                )}
               </header>
 
               <MessagePanel
-                messages={messagesQuery.data ?? []}
+                messages={selectedMessages}
                 currentUser={user}
+                contacts={contacts}
                 loading={messagesQuery.isLoading}
               />
 
               <MessageComposer
                 disabled={!selectedChannelId}
                 sending={sendMessage.isPending}
-                placeholder={`Message #${selectedChannel.name}`}
+                placeholder={
+                  selectedChannel.kind === 'direct'
+                    ? `Message ${selectedTitle}`
+                    : `Message #${selectedChannel.name}`
+                }
                 onSend={handleSend}
+                onSendMedia={handleSendMedia}
               />
             </>
           ) : (
@@ -396,7 +658,10 @@ export function ChatPage() {
               </p>
               <div className="flex flex-wrap gap-2 justify-center mt-2">
                 <Button size="sm" onClick={() => setModal('channel')}>
-                  New channel
+                  New group
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setModal('find-groups')}>
+                  Find groups
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => setModal('dm')}>
                   New DM
@@ -411,10 +676,12 @@ export function ChatPage() {
       </div>
 
       <IncomingCallModal
-        call={incomingCall}
-        busy={respondCall.isPending}
+        call={showIncomingModal ? incomingCall : null}
+        callerName={incomingCallerName}
+        busy={callBusy}
         onAccept={() => void handleAcceptCall()}
         onReject={() => void handleRejectCall()}
+        onLater={() => setShowIncomingModal(false)}
       />
 
       <NewChannelModal
@@ -423,25 +690,50 @@ export function ChatPage() {
         onSubmit={async (data) => {
           const channel = await createChannel.mutateAsync(data)
           setSelectedChannelId(channel.id)
+          if (channel.inviteCode) {
+            setBanner(
+              `Group created · invite code ${channel.inviteCode}` +
+                (data.visibility === 'private' ? ' (share code + password)' : ''),
+            )
+          }
+        }}
+      />
+
+      <FindGroupModal
+        open={modal === 'find-groups'}
+        onClose={() => setModal(null)}
+        onJoin={async (channel) => {
+          const joined = await joinChannel.mutateAsync({
+            channelId: channel.id,
+            inviteCode: channel.inviteCode || '',
+          })
+          setSelectedChannelId(joined.id)
+          setBanner(`Joined #${joined.name}`)
         }}
       />
 
       <NewDmModal
         open={modal === 'dm'}
         onClose={() => setModal(null)}
-        onSubmit={async (peerUserId) => {
-          const channel = await createDm.mutateAsync({ peerUserId })
+        onSubmit={async (peer) => {
+          const channel = await createDm.mutateAsync({ peerUserId: peer.id })
+          rememberDmPeer(channel.id, peer)
           setSelectedChannelId(channel.id)
         }}
       />
 
-      <JoinByIdModal
+      <JoinByCodeModal
         open={modal === 'join-channel'}
         onClose={() => setModal(null)}
-        title="Join channel"
+        title="Join group with invite"
         idLabel="Channel ID"
-        onSubmit={async (channelId, inviteCode) => {
-          const channel = await joinChannel.mutateAsync({ channelId, inviteCode })
+        codeLabel="Invite code"
+        onSubmit={async ({ id, inviteCode, password }) => {
+          const channel = await joinChannel.mutateAsync({
+            channelId: id,
+            inviteCode,
+            password: password || undefined,
+          })
           setSelectedChannelId(channel.id)
         }}
       />
@@ -459,16 +751,28 @@ export function ChatPage() {
             session.room.name,
             session.livekit,
           )
+          if (session.room.inviteCode) {
+            setBanner(
+              `Voice room ready · code ${session.room.inviteCode}` +
+                (data.visibility === 'private' ? ' + password required to join' : ''),
+            )
+          }
         }}
       />
 
-      <JoinByIdModal
+      <JoinByCodeModal
         open={modal === 'join-room'}
         onClose={() => setModal(null)}
-        title="Join voice room"
+        title="Join private voice room"
         idLabel="Room ID"
-        onSubmit={async (roomId, inviteCode) => {
-          const session = await joinRoom.mutateAsync({ roomId, inviteCode })
+        codeLabel="Invite code"
+        requirePassword
+        onSubmit={async ({ id, inviteCode, password }) => {
+          const session = await joinRoom.mutateAsync({
+            roomId: id,
+            inviteCode,
+            password,
+          })
           await connectRoomSession(
             session.room.id,
             session.room.name,
@@ -477,30 +781,12 @@ export function ChatPage() {
         }}
       />
 
-      <StartCallModal
-        open={modal === 'call'}
-        onClose={() => setModal(null)}
-        onSubmit={async (peerUserId) => {
-          const session = await startDirectCall.mutateAsync({ peerUserId })
-          await beginLiveSession(
-            {
-              kind: 'call',
-              roomId: session.room.id,
-              title: session.room.name || 'Direct call',
-              status: 'Ringing…',
-            },
-            session.livekit,
-          )
-          socket.subscribeVoice(session.room.id)
-          setBanner('Calling… waiting for answer')
-        }}
-      />
-
       <ContactsModal
         open={modal === 'contacts'}
         onClose={() => setModal(null)}
         onMessage={async (peer) => {
           const channel = await createDm.mutateAsync({ peerUserId: peer.id })
+          rememberDmPeer(channel.id, peer)
           setSelectedChannelId(channel.id)
         }}
       />

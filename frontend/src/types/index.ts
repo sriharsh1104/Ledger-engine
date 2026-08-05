@@ -5,6 +5,8 @@ export interface User {
   profileImage?: string
   phoneCode?: string
   phoneNumber?: string
+  /** Present on chat message sender — true if viewer saved them as a contact */
+  isContact?: boolean
 }
 
 export interface Wallet {

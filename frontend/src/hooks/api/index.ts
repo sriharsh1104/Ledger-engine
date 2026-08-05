@@ -17,10 +17,12 @@ export {
   useCreateDirectChannel,
   useJoinChannel,
   useSendMessage,
+  useSearchChannels,
   appendChannelMessage,
 } from './useChat'
 export {
   useVoiceRooms,
+  useCallHistory,
   useCreateVoiceRoom,
   useJoinVoiceRoom,
   useStartDirectCall,
