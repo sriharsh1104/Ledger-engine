@@ -18,10 +18,73 @@ export interface Channel {
   visibility: string
   kind: ChannelKind
   inviteCode: string
+  /** Deep link when gateway has PUBLIC_APP_BASE_URL (groups only). */
+  inviteUrl?: string | null
+  /** Encode as QR on the client (inviteUrl or ledger://invite/{code}). */
+  qrPayload?: string | null
   voiceRoomId?: string | null
   memberCount: number
   hasPassword?: boolean
   createdAt: string
+}
+
+/** GET /chat/channels/:id/invite */
+export interface ChannelInvite {
+  channelId: string
+  name: string
+  inviteCode: string
+  inviteUrl?: string | null
+  qrPayload: string
+  memberCount: number
+}
+
+/** WS `chat.cleared` payload */
+export interface ChatClearedEvent {
+  channelId: string
+  clearedBy: string
+  deletedCount: number
+}
+
+export type ChannelMemberRole = 'owner' | 'moderator' | 'member'
+
+/** GET /chat/channels/:id/members */
+export interface ChannelMember {
+  userId: string
+  role: ChannelMemberRole | string
+  user?: User | null
+}
+
+export interface ChatMemberRemovedEvent {
+  channelId: string
+  removedUserId: string
+  removedBy: string
+}
+
+export interface ChatMemberAddedEvent {
+  channelId: string
+  addedUserId: string
+  addedBy: string
+  role?: string
+}
+
+export interface ChatMemberRoleUpdatedEvent {
+  channelId: string
+  userId: string
+  role: ChannelMemberRole | string
+  updatedBy: string
+}
+
+export interface ChatUserMessagesDeletedEvent {
+  channelId: string
+  targetUserId: string
+  deletedBy: string
+  deletedCount: number
+}
+
+export interface ChatMemberBlockedEvent {
+  channelId: string
+  blockedUserId: string
+  blockedBy: string
 }
 
 export interface ChatMessage {
@@ -159,6 +222,12 @@ export type GatewayEventType =
   | 'unsubscribed_voice'
   | 'error'
   | 'chat.message'
+  | 'chat.cleared'
+  | 'chat.member_removed'
+  | 'chat.member_added'
+  | 'chat.member_role_updated'
+  | 'chat.user_messages_deleted'
+  | 'chat.member_blocked'
   | 'voice.call_incoming'
   | 'voice.call_accepted'
   | 'voice.call_rejected'

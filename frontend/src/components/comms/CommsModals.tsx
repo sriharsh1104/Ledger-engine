@@ -291,6 +291,8 @@ interface JoinByCodeModalProps {
   title: string
   /** When true, password field is required */
   requirePassword?: boolean
+  /** When false, hide password field entirely (e.g. join by invite code alone). */
+  showPasswordField?: boolean
   idLabel?: string
   showIdField?: boolean
   codeLabel?: string
@@ -306,6 +308,7 @@ export function JoinByCodeModal({
   onClose,
   title,
   requirePassword = false,
+  showPasswordField,
   idLabel = 'ID',
   showIdField = true,
   codeLabel = 'Invite code',
@@ -316,6 +319,7 @@ export function JoinByCodeModal({
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const allowPassword = showPasswordField ?? (requirePassword || showIdField)
 
   useEffect(() => {
     if (!open) {
@@ -370,7 +374,7 @@ export function JoinByCodeModal({
           onChange={(e) => setCode(e.target.value)}
           autoFocus={!showIdField}
         />
-        {requirePassword && (
+        {allowPassword && requirePassword && (
           <Input
             label="Password"
             type="password"
@@ -379,7 +383,7 @@ export function JoinByCodeModal({
             placeholder="Room password"
           />
         )}
-        {!requirePassword && (
+        {allowPassword && !requirePassword && (
           <Input
             label="Password (optional)"
             type="password"
@@ -621,25 +625,40 @@ export function ContactsModal({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    if (!open) {
+      setBusyId(null)
+      setError('')
+    }
+  }, [open])
+
+  async function openChat(user: User) {
+    if (!onMessage) return
+    setBusyId(user.id)
+    setError('')
+    try {
+      await onMessage(user)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title="Contacts & people" size="md">
+    <Modal open={open} onClose={onClose} title="Contacts" size="md">
       <div className="space-y-4">
+        <p className="text-xs text-slate-400">
+          Saved contacts, phone book (Invite if they&apos;re not on Ledger), or find people. Tap
+          Message to open a DM.
+        </p>
         <UserSearchPicker
           allowManageContacts
-          actionLabel="Select"
-          onSelect={async (user) => {
-            if (!onMessage) return
-            setBusyId(user.id)
-            setError('')
-            try {
-              await onMessage(user)
-              onClose()
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Failed')
-            } finally {
-              setBusyId(null)
-            }
-          }}
+          showPhoneBook
+          actionLabel="Message"
+          defaultTab="contacts"
+          onSelect={(user) => void openChat(user)}
         />
         {busyId && <p className="text-xs text-slate-500">Opening chat…</p>}
         {error && <p className="text-sm text-danger">{error}</p>}

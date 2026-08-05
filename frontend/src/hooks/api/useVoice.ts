@@ -127,3 +127,25 @@ export function useLeaveVoiceRoom() {
     },
   })
 }
+
+export function useClearCallHistory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await voiceService.clearCallHistory()
+      return unwrapApiData(res)
+    },
+    onSuccess: () => invalidateCallHistory(qc),
+  })
+}
+
+export function useHideCallFromHistory() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (callId: string) => {
+      const res = await voiceService.hideCallFromHistory(callId)
+      return unwrapApiData(res)
+    },
+    onSuccess: () => invalidateCallHistory(qc),
+  })
+}

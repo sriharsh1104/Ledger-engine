@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
-import { Hash, Phone, Copy, Check, MessageCircle } from 'lucide-react'
+import {
+  Hash,
+  Phone,
+  MessageCircle,
+  Eraser,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 import { useAppSelector } from '../store/hooks'
 import { useAuth } from '../hooks/useAuth'
 import { useGatewaySocket } from '../hooks/useGatewaySocket'
@@ -11,8 +19,13 @@ import {
   useCreateChannel,
   useCreateDirectChannel,
   useJoinChannel,
+  useJoinByInviteCode,
+  useClearMessages,
   useSendMessage,
   appendChannelMessage,
+  clearChannelMessages,
+  removeMessagesBySender,
+  removeChannelFromList,
   useVoiceRooms,
   useCreateVoiceRoom,
   useJoinVoiceRoom,
@@ -27,12 +40,18 @@ import type {
   Call,
   CallSession,
   Channel,
+  ChatClearedEvent,
+  ChatMemberBlockedEvent,
+  ChatMemberAddedEvent,
+  ChatMemberRemovedEvent,
+  ChatMemberRoleUpdatedEvent,
   ChatMessage,
+  ChatUserMessagesDeletedEvent,
   GatewayEvent,
   LiveKitCredentials,
 } from '../api/comms.types'
 import type { User } from '../types'
-import { peerFromMessages, resolvePeerLabel } from '../lib/displayName'
+import { peerFromMessages, resolvePeerLabel, looksLikeTruncatedId } from '../lib/displayName'
 import { ChannelSidebar } from '../components/comms/ChannelSidebar'
 import { MessagePanel } from '../components/comms/MessagePanel'
 import { MessageComposer } from '../components/comms/MessageComposer'
@@ -46,7 +65,11 @@ import {
   ContactsModal,
   FindGroupModal,
 } from '../components/comms/CommsModals'
+import { GroupInviteModal } from '../components/comms/GroupInviteModal'
+import { GroupMembersModal } from '../components/comms/GroupMembersModal'
 import { Button } from '../components/ui/Button'
+import { ConfirmModal } from '../components/ui/Modal'
+import { queryKeys } from '../lib/queryKeys'
 
 type ActiveSession = {
   kind: 'call' | 'room'
@@ -59,6 +82,8 @@ export function ChatPage() {
   const { user } = useAuth()
   const token = useAppSelector((s) => s.auth.token)
   const qc = useQueryClient()
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null)
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null)
@@ -69,9 +94,9 @@ export function ChatPage() {
   const [callBusy, setCallBusy] = useState(false)
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
   /** channelId → peer user (for DM labels) */
   const [dmPeers, setDmPeers] = useState<Record<string, User>>({})
+  const [confirmClear, setConfirmClear] = useState(false)
 
   const [modal, setModal] = useState<
     | null
@@ -82,6 +107,8 @@ export function ChatPage() {
     | 'room'
     | 'join-room'
     | 'contacts'
+    | 'invite'
+    | 'members'
   >(null)
 
   const channelsQuery = useChannels({ limit: 50 })
@@ -92,6 +119,8 @@ export function ChatPage() {
   const createChannel = useCreateChannel()
   const createDm = useCreateDirectChannel()
   const joinChannel = useJoinChannel()
+  const joinByInvite = useJoinByInviteCode()
+  const clearMessages = useClearMessages()
   const createRoom = useCreateVoiceRoom()
   const joinRoom = useJoinVoiceRoom()
   const startDirectCall = useStartDirectCall()
@@ -108,9 +137,13 @@ export function ChatPage() {
 
   const rememberDmPeer = useCallback((channelId: string, peer: User) => {
     setDmPeers((prev) => {
-      if (prev[channelId]?.id === peer.id && prev[channelId]?.name === peer.name) {
-        return prev
-      }
+      const existing = prev[channelId]
+      if (!existing) return { ...prev, [channelId]: peer }
+      if (existing.id === peer.id && existing.name === peer.name) return prev
+      // Don't overwrite a real username with an empty / truncated-id placeholder
+      const existingOk = !looksLikeTruncatedId(existing.name, existing.id)
+      const incomingOk = !looksLikeTruncatedId(peer.name, peer.id)
+      if (existingOk && !incomingOk && existing.id === peer.id) return prev
       return { ...prev, [channelId]: peer }
     })
   }, [])
@@ -154,14 +187,14 @@ export function ChatPage() {
     const callerId = incomingCall.callerId
     const fromDm = Object.values(dmPeers).find((p) => p.id === callerId)
     const fromContacts = contacts.find((c) => c.id === callerId)
+    const known =
+      fromContacts || incomingCaller || fromDm || null
     return resolvePeerLabel(
-      fromContacts ||
-        incomingCaller ||
-        fromDm || {
-          id: callerId,
-          name: callerId.slice(0, 8),
-          email: '',
-        },
+      known ?? {
+        id: callerId,
+        name: '',
+        email: '',
+      },
       contacts,
     ).title
   }, [incomingCall, incomingCaller, dmPeers, contacts])
@@ -171,6 +204,19 @@ export function ChatPage() {
       setSelectedChannelId(channelsQuery.data[0].id)
     }
   }, [channelsQuery.data, selectedChannelId])
+
+  // Deep-link /invite/:code or Connect-sidebar contact → select channel
+  useEffect(() => {
+    const state = location.state as {
+      selectChannelId?: string
+      dmPeer?: User
+    } | null
+    if (state?.selectChannelId) {
+      setSelectedChannelId(state.selectChannelId)
+      if (state.dmPeer) rememberDmPeer(state.selectChannelId, state.dmPeer)
+      navigate(location.pathname, { replace: true, state: {} })
+    }
+  }, [location.state, location.pathname, navigate, rememberDmPeer])
 
   const beginLiveSession = useCallback(
     async (
@@ -220,6 +266,92 @@ export function ChatPage() {
             ) {
               rememberDmPeer(msg.channelId, msg.sender)
             }
+          }
+          break
+        }
+        case 'chat.cleared': {
+          const payload = event.data as ChatClearedEvent | undefined
+          if (payload?.channelId) {
+            clearChannelMessages(qc, payload.channelId)
+            if (payload.channelId === selectedChannelId) {
+              setBanner('Chat cleared')
+            }
+          }
+          break
+        }
+        case 'chat.member_removed': {
+          const payload = event.data as ChatMemberRemovedEvent | undefined
+          if (!payload?.channelId) break
+          void qc.invalidateQueries({
+            queryKey: queryKeys.chat.members(payload.channelId),
+          })
+          void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+          if (payload.removedUserId === user?.id) {
+            removeChannelFromList(qc, payload.channelId)
+            if (selectedChannelId === payload.channelId) {
+              setSelectedChannelId(null)
+              setBanner('You were removed from the group')
+            }
+          } else if (payload.channelId === selectedChannelId) {
+            setBanner('A member was removed')
+          }
+          break
+        }
+        case 'chat.member_added': {
+          const payload = event.data as ChatMemberAddedEvent | undefined
+          if (!payload?.channelId) break
+          void qc.invalidateQueries({
+            queryKey: queryKeys.chat.members(payload.channelId),
+          })
+          void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+          if (payload.addedUserId === user?.id) {
+            setBanner('You were added to a group')
+          } else if (payload.channelId === selectedChannelId) {
+            setBanner('A member was added')
+          }
+          break
+        }
+        case 'chat.member_role_updated': {
+          const payload = event.data as ChatMemberRoleUpdatedEvent | undefined
+          if (!payload?.channelId) break
+          void qc.invalidateQueries({
+            queryKey: queryKeys.chat.members(payload.channelId),
+          })
+          if (payload.channelId === selectedChannelId) {
+            setBanner(
+              payload.userId === user?.id
+                ? `Your role is now ${payload.role}`
+                : 'Member role updated',
+            )
+          }
+          break
+        }
+        case 'chat.user_messages_deleted': {
+          const payload = event.data as ChatUserMessagesDeletedEvent | undefined
+          if (!payload?.channelId || !payload.targetUserId) break
+          removeMessagesBySender(qc, payload.channelId, payload.targetUserId)
+          if (payload.channelId === selectedChannelId) {
+            setBanner(
+              `Removed ${payload.deletedCount ?? 0} messages from a member`,
+            )
+          }
+          break
+        }
+        case 'chat.member_blocked': {
+          const payload = event.data as ChatMemberBlockedEvent | undefined
+          if (!payload?.channelId) break
+          void qc.invalidateQueries({
+            queryKey: queryKeys.chat.members(payload.channelId),
+          })
+          void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+          if (payload.blockedUserId === user?.id) {
+            removeChannelFromList(qc, payload.channelId)
+            if (selectedChannelId === payload.channelId) {
+              setSelectedChannelId(null)
+              setBanner('You were blocked from this group')
+            }
+          } else if (payload.channelId === selectedChannelId) {
+            setBanner('A member was blocked')
           }
           break
         }
@@ -355,6 +487,7 @@ export function ChatPage() {
       channels,
       dmPeers,
       endCall,
+      selectedChannelId,
     ],
   )
 
@@ -507,15 +640,8 @@ export function ChatPage() {
     }
   }
 
-  function copyInvite() {
-    if (!selectedChannel?.inviteCode) return
-    void navigator.clipboard.writeText(selectedChannel.inviteCode)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-
   return (
-    <div className="-m-4 lg:-m-8 flex-1 min-h-0 flex overflow-hidden rounded-none border-0">
+    <div className="absolute inset-0 flex overflow-hidden rounded-none border-0">
       <div className="flex flex-1 min-h-0 bg-surface border border-border-subtle rounded-none lg:rounded-2xl overflow-hidden shadow-xl">
         <ChannelSidebar
           channels={channels}
@@ -591,21 +717,6 @@ export function ChatPage() {
                       : `${selectedChannel.kind} · ${selectedChannel.visibility} · ${selectedChannel.memberCount} members`}
                   </p>
                 </div>
-                {selectedChannel.inviteCode && selectedChannel.kind !== 'direct' && (
-                  <button
-                    type="button"
-                    onClick={copyInvite}
-                    className="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-surface-overlay cursor-pointer"
-                    title="Copy invite code"
-                  >
-                    {copied ? (
-                      <Check className="w-3.5 h-3.5 text-accent" />
-                    ) : (
-                      <Copy className="w-3.5 h-3.5" />
-                    )}
-                    {selectedChannel.inviteCode}
-                  </button>
-                )}
                 {selectedChannel.kind === 'direct' && (
                   <Button
                     size="sm"
@@ -623,6 +734,39 @@ export function ChatPage() {
                     Call
                   </Button>
                 )}
+                {selectedChannel.kind !== 'direct' && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setModal('members')}
+                      title="Members & roles"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Members</span>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setModal('invite')}
+                      title="Invite people"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Invite</span>
+                    </Button>
+                  </>
+                )}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={clearMessages.isPending}
+                  disabled={!selectedMessages.length}
+                  onClick={() => setConfirmClear(true)}
+                  title="Clear chat"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Clear</span>
+                </Button>
               </header>
 
               <MessagePanel
@@ -725,16 +869,62 @@ export function ChatPage() {
       <JoinByCodeModal
         open={modal === 'join-channel'}
         onClose={() => setModal(null)}
-        title="Join group with invite"
-        idLabel="Channel ID"
+        title="Join group with invite code"
+        showIdField={false}
         codeLabel="Invite code"
-        onSubmit={async ({ id, inviteCode, password }) => {
-          const channel = await joinChannel.mutateAsync({
-            channelId: id,
-            inviteCode,
-            password: password || undefined,
-          })
+        onSubmit={async ({ inviteCode }) => {
+          const channel = await joinByInvite.mutateAsync(inviteCode)
           setSelectedChannelId(channel.id)
+          setBanner(`Joined #${channel.name}`)
+        }}
+      />
+
+      <GroupInviteModal
+        open={modal === 'invite'}
+        onClose={() => setModal(null)}
+        channelId={
+          selectedChannel?.kind !== 'direct' ? selectedChannelId : null
+        }
+        channelName={selectedChannel?.kind !== 'direct' ? selectedChannel?.name : undefined}
+      />
+
+      <GroupMembersModal
+        open={modal === 'members'}
+        onClose={() => setModal(null)}
+        channelId={
+          selectedChannel?.kind !== 'direct' ? selectedChannelId : null
+        }
+        channelName={
+          selectedChannel?.kind !== 'direct' ? selectedChannel?.name : undefined
+        }
+        currentUserId={user?.id}
+        contacts={contacts}
+        onBanner={setBanner}
+      />
+
+      <ConfirmModal
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title="Clear chat?"
+        message={
+          selectedChannel?.kind === 'direct'
+            ? 'This deletes all messages in this chat for everyone. Membership stays the same.'
+            : 'This deletes all messages in this group for everyone. Membership stays the same.'
+        }
+        confirmLabel="Clear chat"
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          void (async () => {
+            if (!selectedChannelId) return
+            try {
+              await clearMessages.mutateAsync(selectedChannelId)
+              setBanner('Chat cleared')
+            } catch (err) {
+              setBanner(getApiErrorMessage(err))
+            } finally {
+              setConfirmClear(false)
+            }
+          })()
         }}
       />
 

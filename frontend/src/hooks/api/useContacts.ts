@@ -2,15 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contactsService } from '../../services/contacts.service'
 import { queryKeys } from '../../lib/queryKeys'
 import { unwrapApiData } from '../../lib/apiUtils'
+import { normalizeUserStatus } from '../../lib/status'
 import type { User } from '../../types'
+
+function withStatus(user: User): User {
+  const status = normalizeUserStatus(user.status)
+  return status ? { ...user, status } : user
+}
 
 function extractUsers(data: unknown): User[] {
   if (!data) return []
-  if (Array.isArray(data)) return data as User[]
+  if (Array.isArray(data)) return (data as User[]).map(withStatus)
   if (typeof data === 'object') {
     const obj = data as { users?: User[]; contacts?: User[] }
-    if (Array.isArray(obj.users)) return obj.users
-    if (Array.isArray(obj.contacts)) return obj.contacts
+    if (Array.isArray(obj.users)) return obj.users.map(withStatus)
+    if (Array.isArray(obj.contacts)) return obj.contacts.map(withStatus)
   }
   return []
 }

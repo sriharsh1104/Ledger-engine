@@ -1,5 +1,16 @@
-import { Hash, Lock, MessageCircle, Plus, Phone, Radio, Search, Users } from 'lucide-react'
+import {
+  Hash,
+  Lock,
+  MessageCircle,
+  Plus,
+  Phone,
+  Radio,
+  Search,
+  Users,
+} from 'lucide-react'
 import type { Channel, VoiceRoom } from '../../api/comms.types'
+import { useMyStatus } from '../../hooks/api'
+import { STATUS_META, statusLabel } from '../../lib/status'
 
 interface ChannelSidebarProps {
   channels: Channel[]
@@ -17,6 +28,7 @@ interface ChannelSidebarProps {
   onJoinPrivateChannel: () => void
   onNewRoom: () => void
   onJoinPrivateRoom: () => void
+  /** Open full contacts modal (find people / manage) */
   onOpenContacts: () => void
 }
 
@@ -73,6 +85,8 @@ export function ChannelSidebar({
   onJoinPrivateRoom,
   onOpenContacts,
 }: ChannelSidebarProps) {
+  const { status } = useMyStatus()
+  const statusMeta = STATUS_META[status]
   const groups = channels.filter((c) => c.kind !== 'direct')
   const dms = channels.filter((c) => c.kind === 'direct')
 
@@ -84,9 +98,11 @@ export function ChannelSidebar({
             <p className="text-sm font-semibold text-white">Messages</p>
             <p className="text-[10px] text-slate-500 flex items-center gap-1.5 mt-0.5">
               <span
-                className={`w-1.5 h-1.5 rounded-full ${wsConnected ? 'bg-accent' : 'bg-slate-600'}`}
+                className={`w-1.5 h-1.5 rounded-full ${
+                  wsConnected ? statusMeta.dotClass : 'bg-slate-600'
+                }`}
               />
-              {wsConnected ? 'Live' : 'Connecting…'}
+              {wsConnected ? statusLabel(status) : 'Connecting…'}
             </p>
           </div>
           <button

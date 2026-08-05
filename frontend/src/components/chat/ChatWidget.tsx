@@ -4,11 +4,9 @@ import { Bot, Maximize2, MessageCircle, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useChatbot } from '../../hooks/useChatbot'
 import { useAuth } from '../../hooks/useAuth'
-import { getChatbotApiKey, setChatbotApiKey } from '../../api/chatbotClient'
 import { ChatInput } from './ChatInput'
 import { ChatMessage } from './ChatMessage'
 import { Button } from '../ui/Button'
-import { Input } from '../ui/Input'
 
 export function ChatWidget() {
   const [open, setOpen] = useState(false)
@@ -16,13 +14,20 @@ export function ChatWidget() {
   const { isAuthenticated } = useAuth()
   const scrollRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
-  const [keyDraft, setKeyDraft] = useState('')
+
+  useEffect(() => {
+    chat.refreshAuthState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check when auth flips
+  }, [isAuthenticated])
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el || !open) return
     el.scrollTop = el.scrollHeight
   }, [chat.messages, chat.sending, open])
+
+  const remaining =
+    chat.meta.calls_remaining_today ?? chat.usage?.callsRemainingToday
 
   return createPortal(
     <div className="fixed bottom-5 right-5 z-[100] flex flex-col items-end gap-3 pointer-events-none">
@@ -35,7 +40,9 @@ export function ChatWidget() {
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate">AI Assistant</p>
-                <p className="text-[10px] text-slate-400 truncate">Ask anything</p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  {remaining != null ? `${remaining} left today` : 'Ask anything'}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -63,27 +70,14 @@ export function ChatWidget() {
             </div>
           </header>
 
-          {!chat.hasApiKey ? (
+          {!isAuthenticated ? (
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               <p className="text-sm text-slate-400">
-                Paste your chatbot API key to start chatting.
+                Sign in to use the AI assistant. Chat history and daily limits are tied
+                to your account.
               </p>
-              <Input
-                type="password"
-                value={keyDraft}
-                onChange={(e) => setKeyDraft(e.target.value)}
-                placeholder="X-API-Key…"
-                autoComplete="off"
-              />
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={() => {
-                  setChatbotApiKey(keyDraft || getChatbotApiKey())
-                  chat.refreshKeyState()
-                }}
-              >
-                Save key & chat
+              <Button className="w-full" size="sm" onClick={() => navigate('/login')}>
+                Sign in
               </Button>
             </div>
           ) : (

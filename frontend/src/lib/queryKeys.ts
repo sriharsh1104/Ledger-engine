@@ -20,11 +20,18 @@ export const queryKeys = {
   profile: {
     me: ['profile', 'me'] as const,
   },
+  users: {
+    myStatus: ['users', 'me', 'status'] as const,
+    statusBatch: (ids: string[]) => ['users', 'status', ids] as const,
+  },
   chat: {
     channels: (params?: { limit?: number; offset?: number }) =>
       ['chat', 'channels', params] as const,
     channel: (id: string) => ['chat', 'channel', id] as const,
+    channelInvite: (id: string) => ['chat', 'channel', id, 'invite'] as const,
+    invite: (code: string) => ['chat', 'invite', code] as const,
     messages: (channelId: string) => ['chat', 'messages', channelId] as const,
+    members: (channelId: string) => ['chat', 'members', channelId] as const,
     search: (q: string) => ['chat', 'channels', 'search', q] as const,
   },
   voice: {

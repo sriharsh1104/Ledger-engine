@@ -1,3 +1,6 @@
+/** Presence / availability — PATCH /users/me/status */
+export type UserStatus = 'online' | 'offline' | 'busy' | 'dnd'
+
 export interface User {
   id: string
   name: string
@@ -5,8 +8,14 @@ export interface User {
   profileImage?: string
   phoneCode?: string
   phoneNumber?: string
+  /** online | offline | busy | dnd — from contacts/search/members/status APIs */
+  status?: UserStatus
   /** Present on chat message sender — true if viewer saved them as a contact */
   isContact?: boolean
+}
+
+export interface UserStatusUpdate {
+  status: UserStatus
 }
 
 export interface Wallet {

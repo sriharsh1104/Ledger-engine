@@ -1,13 +1,19 @@
-import { chatbotFetch, getChatbotBaseUrl } from '../api/chatbotClient'
+import axios from 'axios'
+import { apiClient } from '../api/client'
+import { chatbotFetch, ChatbotApiError } from '../api/chatbotClient'
+import type { ApiResponse } from '../api/types'
 import type {
+  ChatbotMe,
+  ChatbotUsage,
   ChatConversationDetail,
   ChatConversationSummary,
   ChatMode,
   ChatModesResponse,
   ChatRequest,
   ChatResponse,
-  ChatUserInfo,
 } from '../api/chatbot.types'
+
+const CHATBOT = '/chatbot'
 
 export const CHAT_MODES: { id: ChatMode; label: string }[] = [
   { id: 'general', label: 'General' },
@@ -16,6 +22,24 @@ export const CHAT_MODES: { id: ChatMode; label: string }[] = [
   { id: 'sql', label: 'SQL' },
   { id: 'code-review', label: 'Code Review' },
 ]
+
+function toChatbotError(error: unknown): ChatbotApiError {
+  if (error instanceof ChatbotApiError) return error
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as
+      | { message?: string; code?: string }
+      | undefined
+    return new ChatbotApiError(
+      data?.message ?? error.message ?? 'Chatbot request failed',
+      error.response?.status ?? 500,
+      data?.code,
+    )
+  }
+  if (error instanceof Error) {
+    return new ChatbotApiError(error.message, 500)
+  }
+  return new ChatbotApiError('Chatbot request failed', 500)
+}
 
 function normalizeModes(payload: ChatModesResponse | string): { id: string; label: string }[] {
   if (typeof payload === 'string') {
@@ -83,7 +107,11 @@ export type StreamHandlers = {
 }
 
 /** Extract text tokens from assorted streaming payload shapes. */
-function extractStreamToken(payload: unknown): { token?: string; done?: boolean; meta?: Partial<ChatResponse> } {
+function extractStreamToken(payload: unknown): {
+  token?: string
+  done?: boolean
+  meta?: Partial<ChatResponse>
+} {
   if (payload == null) return {}
   if (typeof payload === 'string') {
     if (payload === '[DONE]') return { done: true }
@@ -155,7 +183,6 @@ async function consumeChatStream(
         handlers.onMeta?.(parsed.meta)
       }
     } catch {
-      // plain text chunk
       sawTokens = true
       handlers.onToken(data)
     }
@@ -173,7 +200,7 @@ async function consumeChatStream(
 
   if (buffer.trim()) handleLine(buffer)
 
-  // If the body was a single JSON ChatResponse (non-SSE), parse it.
+  // Non-SSE single JSON ChatResponse
   if (!sawTokens && buffer.trim().startsWith('{')) {
     try {
       const json = JSON.parse(buffer) as ChatResponse
@@ -188,25 +215,39 @@ async function consumeChatStream(
 }
 
 export const chatbotService = {
-  async health() {
-    const res = await fetch(`${getChatbotBaseUrl()}/health`)
-    if (!res.ok) throw new Error('Chatbot health check failed')
-    return res.json()
-  },
-
+  /** GET /chatbot/modes — public */
   async listModes() {
-    const res = await fetch(`${getChatbotBaseUrl()}/modes`)
-    if (!res.ok) return CHAT_MODES
-    const data = (await res.json()) as ChatModesResponse
-    return normalizeModes(data)
+    try {
+      const res = await apiClient.get<ChatModesResponse | string>(`${CHATBOT}/modes`)
+      return normalizeModes(res.data)
+    } catch {
+      return CHAT_MODES
+    }
   },
 
-  async me(): Promise<ChatUserInfo> {
-    const res = await chatbotFetch('/me')
-    return res.json()
+  /** GET /chatbot/me — JWT */
+  async me(): Promise<ChatbotMe> {
+    try {
+      const res = await apiClient.get<ApiResponse<ChatbotMe>>(`${CHATBOT}/me`)
+      return res.data.data
+    } catch (error) {
+      throw toChatbotError(error)
+    }
   },
 
+  /** GET /chatbot/usage — JWT */
+  async usage(): Promise<ChatbotUsage> {
+    try {
+      const res = await apiClient.get<ApiResponse<ChatbotUsage>>(`${CHATBOT}/usage`)
+      return res.data.data
+    } catch (error) {
+      throw toChatbotError(error)
+    }
+  },
+
+  /** POST /chatbot/chat — JWT + daily limit */
   async chat(body: ChatRequest): Promise<ChatResponse> {
+    // Use fetch so gateway error codes (e.g. CHATBOT_DAILY_LIMIT) are preserved.
     const res = await chatbotFetch('/chat', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -214,6 +255,7 @@ export const chatbotService = {
     return res.json()
   },
 
+  /** POST /chatbot/chat/stream — JWT + daily limit (SSE) */
   async chatStream(body: ChatRequest, handlers: StreamHandlers): Promise<Partial<ChatResponse>> {
     const res = await chatbotFetch('/chat/stream', {
       method: 'POST',
@@ -233,15 +275,23 @@ export const chatbotService = {
     return consumeChatStream(res, handlers)
   },
 
+  /** GET /chatbot/conversations — JWT, own only */
   async listConversations(): Promise<ChatConversationSummary[]> {
-    const res = await chatbotFetch('/conversations')
-    const data = await res.json()
-    return asConversationList(data)
+    try {
+      const res = await apiClient.get(`${CHATBOT}/conversations`)
+      return asConversationList(res.data)
+    } catch (error) {
+      throw toChatbotError(error)
+    }
   },
 
+  /** GET /chatbot/conversations/:id — JWT + ownership */
   async getConversation(id: string): Promise<ChatConversationDetail> {
-    const res = await chatbotFetch(`/conversations/${id}`)
-    const data = await res.json()
-    return asConversationDetail(data, id)
+    try {
+      const res = await apiClient.get(`${CHATBOT}/conversations/${id}`)
+      return asConversationDetail(res.data, id)
+    } catch (error) {
+      throw toChatbotError(error)
+    }
   },
 }

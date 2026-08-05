@@ -70,4 +70,16 @@ export const voiceService = {
       `${VOICE}/calls/history`,
       { params },
     ),
+
+  /** Hide all calls from this user's history (others unaffected). */
+  clearCallHistory: () =>
+    apiClient.delete<ApiResponse<{ hiddenCount: number }>>(
+      `${VOICE}/calls/history`,
+    ),
+
+  /** Hide one call from this user's history. */
+  hideCallFromHistory: (callId: string) =>
+    apiClient.delete<ApiResponse<{ message: string }>>(
+      `${VOICE}/calls/history/${callId}`,
+    ),
 }

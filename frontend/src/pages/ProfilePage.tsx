@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react'
-import { Camera, CheckCircle, User, Mail, Phone, Lock } from 'lucide-react'
+import { Camera, CheckCircle, User, Mail, Phone, Lock, CircleDot } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { useProfile } from '../hooks/api'
+import { useMyStatus, useProfile } from '../hooks/api'
 import { config } from '../lib/config'
 import { PHONE_COUNTRIES } from '../lib/profile'
+import { statusLabel } from '../lib/status'
 import { AuthLoadingScreen } from '../components/auth/AuthLoadingScreen'
 import { Card, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { StatusPicker } from '../components/presence/StatusPicker'
+import { UserAvatar } from '../components/presence/UserAvatar'
 
 export function ProfilePage() {
   const { user, updateProfile, isLoading } = useAuth()
+  const { status } = useMyStatus(!!user)
   const profileQuery = useProfile(!config.useMockApi && !!user)
   const profileUser = config.useMockApi ? user : (profileQuery.data ?? user)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -108,21 +112,17 @@ export function ProfilePage() {
           {/* Profile Image */}
           <div className="flex items-center gap-5">
             <div className="relative">
-              {profileImage ? (
-                <img
-                  src={profileImage}
-                  alt="Profile"
-                  className="w-20 h-20 rounded-full object-cover border-2 border-accent/30"
-                />
-              ) : (
-                <div className="w-20 h-20 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-2xl border-2 border-accent/30">
-                  {profileUser?.name?.charAt(0).toUpperCase()}
-                </div>
-              )}
+              <UserAvatar
+                name={profileUser?.name || '?'}
+                image={profileImage || undefined}
+                status={status}
+                size="xl"
+                className="rounded-full ring-2 ring-accent/30"
+              />
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white shadow-lg cursor-pointer hover:bg-accent-hover transition-colors"
+                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-accent flex items-center justify-center text-white shadow-lg cursor-pointer hover:bg-accent-hover transition-colors z-10"
               >
                 <Camera className="w-4 h-4" />
               </button>
@@ -137,6 +137,7 @@ export function ProfilePage() {
             <div>
               <p className="text-sm font-medium text-white">Profile Photo</p>
               <p className="text-xs text-slate-500 mt-1">JPG, PNG or GIF. Max 2MB.</p>
+              <p className="text-xs text-slate-400 mt-1">{statusLabel(status)}</p>
               {profileImage && (
                 <button
                   type="button"
@@ -206,6 +207,19 @@ export function ProfilePage() {
             Update Profile
           </Button>
         </form>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CircleDot className="w-4 h-4 text-accent" />
+            Status
+          </CardTitle>
+          <CardDescription>
+            Choose how you appear to contacts, search, and group members
+          </CardDescription>
+        </CardHeader>
+        <StatusPicker variant="chips" />
       </Card>
     </div>
   )

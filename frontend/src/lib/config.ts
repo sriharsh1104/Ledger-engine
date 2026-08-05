@@ -78,11 +78,13 @@ export const config = {
   useMockApi:
     import.meta.env.VITE_USE_MOCK_API === 'true' ||
     (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_API !== 'false'),
-  /** AI CLI Chatbot API (https://ai-cli-chatbot-production.up.railway.app) */
+  /**
+   * AI Assistant via api-gateway (Bearer JWT).
+   * Upstream Railway key stays server-side as CHATBOT_API_KEY.
+   */
   chatbotApiUrl:
-    import.meta.env.VITE_CHATBOT_API_URL ??
-    'https://ai-cli-chatbot-production.up.railway.app',
-  chatbotApiKey: import.meta.env.VITE_CHATBOT_API_KEY ?? '',
+    (import.meta.env.VITE_CHATBOT_API_URL as string | undefined)?.trim() ||
+    `${apiBaseUrl}/chatbot`,
   /** Gateway WebSocket — connect only on Chat/Call screens */
   wsUrl: deriveWsBaseUrl(apiBaseUrl),
 } as const

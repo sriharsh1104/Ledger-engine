@@ -1,3 +1,5 @@
+import type { User } from '../types'
+
 export type ChatMode = 'general' | 'ruby' | 'python' | 'sql' | 'code-review'
 
 export interface ChatRequest {
@@ -45,12 +47,19 @@ export interface ChatModesResponse {
   modes: string | Record<string, string> | Array<{ id: string; label: string }>
 }
 
-export interface ChatUserInfo {
-  id: string
-  username: string
-  email: string
-  tier: string
-  created_at: string
+/** GET /chatbot/me — camelCase inside `{ data }`. */
+export interface ChatbotMe {
+  user: User
+  dailyLimit: number
+  usedToday: number
+  callsRemainingToday: number
+}
+
+/** GET /chatbot/usage — camelCase inside `{ data }`. */
+export interface ChatbotUsage {
+  dailyLimit: number
+  usedToday: number
+  callsRemainingToday: number
 }
 
 export interface UiChatMessage {

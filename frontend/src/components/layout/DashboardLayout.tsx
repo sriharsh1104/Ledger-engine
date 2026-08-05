@@ -5,21 +5,27 @@ import {
   Phone,
   Bell,
   Menu,
+  Users,
   X,
 } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../../hooks/useAuth'
+import { useMyStatus } from '../../hooks/api'
+import { statusLabel } from '../../lib/status'
+import { UserAvatar } from '../presence/UserAvatar'
 import { SettingsMenu } from './SettingsMenu'
 import { ThemeToggle } from '../ui/ThemeToggle'
 
 const navItems = [
   { to: '/messages', label: 'Messages', icon: MessagesSquare },
+  { to: '/contacts', label: 'Contacts', icon: Users },
   { to: '/calls', label: 'Call history', icon: Phone },
   { to: '/assistant', label: 'AI Assistant', icon: MessageSquare },
 ]
 
 export function DashboardLayout() {
   const { user, logout } = useAuth()
+  const { status } = useMyStatus(!!user)
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
@@ -29,7 +35,7 @@ export function DashboardLayout() {
   }
 
   return (
-    <div className="min-h-screen gradient-mesh flex">
+    <div className="h-dvh max-h-dvh overflow-hidden gradient-mesh flex">
       {sidebarOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-40 lg:hidden"
@@ -38,7 +44,7 @@ export function DashboardLayout() {
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 bg-surface-raised border-r border-border-subtle
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-64 h-dvh lg:h-auto bg-surface-raised border-r border-border-subtle
           flex flex-col transition-transform duration-300
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
@@ -83,22 +89,23 @@ export function DashboardLayout() {
             onClick={() => navigate('/profile')}
             className="flex items-center gap-3 px-2 w-full rounded-xl hover:bg-surface-overlay py-2 transition-colors cursor-pointer"
           >
-            {user?.profileImage ? (
-              <img src={user.profileImage} alt="" className="w-9 h-9 rounded-full object-cover" />
-            ) : (
-              <div className="w-9 h-9 rounded-full bg-accent/20 flex items-center justify-center text-accent font-semibold text-sm">
-                {user?.name?.charAt(0).toUpperCase()}
-              </div>
-            )}
+            <UserAvatar
+              name={user?.name || '?'}
+              image={user?.profileImage}
+              status={status}
+            />
             <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-              <p className="text-xs text-slate-500 truncate">{user?.email}</p>
+              <p className="text-xs text-slate-500 truncate">
+                {statusLabel(status)}
+                {user?.email ? ` · ${user.email}` : ''}
+              </p>
             </div>
           </button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
         <header className="relative z-50 shrink-0 h-16 border-b border-border-subtle flex items-center justify-between px-4 lg:px-8 bg-surface/80 backdrop-blur-sm">
           <button className="lg:hidden text-slate-400" onClick={() => setSidebarOpen(true)}>
             <Menu className="w-5 h-5" />
@@ -117,7 +124,7 @@ export function DashboardLayout() {
         </header>
 
         <main className="relative z-0 flex-1 min-h-0 overflow-hidden flex flex-col">
-          <div className="flex-1 min-h-0 overflow-auto p-4 lg:p-8 flex flex-col">
+          <div className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 lg:p-8 flex flex-col">
             <Outlet />
           </div>
         </main>

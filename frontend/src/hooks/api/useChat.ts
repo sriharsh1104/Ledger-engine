@@ -97,6 +97,197 @@ export function useJoinChannel() {
   })
 }
 
+/** Join group by invite code alone (no channel id). */
+export function useJoinByInviteCode() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (inviteCode: string) => {
+      const res = await chatService.joinByInviteCode(inviteCode)
+      return unwrapApiData(res)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+    },
+  })
+}
+
+export function usePreviewInvite(inviteCode: string, enabled = true) {
+  const trimmed = inviteCode.trim()
+  return useQuery({
+    queryKey: [...queryKeys.chat.invite(trimmed)],
+    enabled: enabled && trimmed.length >= 2,
+    queryFn: async () => {
+      const res = await chatService.previewInvite(trimmed)
+      return unwrapApiData(res)
+    },
+  })
+}
+
+export function useChannelInvite(channelId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.chat.channelInvite(channelId ?? ''),
+    enabled: enabled && !!channelId,
+    queryFn: async () => {
+      const res = await chatService.getChannelInvite(channelId!)
+      return unwrapApiData(res)
+    },
+  })
+}
+
+export function useClearMessages() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const res = await chatService.clearMessages(channelId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, channelId) => {
+      qc.setQueryData<ChatMessage[]>(queryKeys.chat.messages(channelId), [])
+    },
+  })
+}
+
+function invalidateMembers(
+  qc: ReturnType<typeof useQueryClient>,
+  channelId: string,
+) {
+  void qc.invalidateQueries({ queryKey: queryKeys.chat.members(channelId) })
+  void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+}
+
+export function useChannelMembers(channelId: string | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.chat.members(channelId ?? ''),
+    enabled: enabled && !!channelId,
+    queryFn: async () => {
+      const res = await chatService.listMembers(channelId!)
+      return unwrapApiData(res) ?? []
+    },
+  })
+}
+
+export function useRemoveMember() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+    }: {
+      channelId: string
+      userId: string
+    }) => {
+      const res = await chatService.removeMember(channelId, userId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId }) => invalidateMembers(qc, channelId),
+  })
+}
+
+export function useAddMember() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+    }: {
+      channelId: string
+      userId: string
+    }) => {
+      const res = await chatService.addMember(channelId, userId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId }) => invalidateMembers(qc, channelId),
+  })
+}
+
+export function useUpdateMemberRole() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+      role,
+    }: {
+      channelId: string
+      userId: string
+      role: 'moderator' | 'member'
+    }) => {
+      const res = await chatService.updateMemberRole(channelId, userId, role)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId }) => invalidateMembers(qc, channelId),
+  })
+}
+
+export function useDeleteUserMessages() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+    }: {
+      channelId: string
+      userId: string
+    }) => {
+      const res = await chatService.deleteUserMessages(channelId, userId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId, userId }) => {
+      qc.setQueryData<ChatMessage[]>(
+        queryKeys.chat.messages(channelId),
+        (prev) => (prev ?? []).filter((m) => m.senderId !== userId),
+      )
+    },
+  })
+}
+
+export function useBlockMember() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+    }: {
+      channelId: string
+      userId: string
+    }) => {
+      const res = await chatService.blockMember(channelId, userId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId }) => invalidateMembers(qc, channelId),
+  })
+}
+
+export function useUnblockMember() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      channelId,
+      userId,
+    }: {
+      channelId: string
+      userId: string
+    }) => {
+      const res = await chatService.unblockMember(channelId, userId)
+      return unwrapApiData(res)
+    },
+    onSuccess: (_data, { channelId }) => invalidateMembers(qc, channelId),
+  })
+}
+
+export function useLeaveChannel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (channelId: string) => {
+      const res = await chatService.leaveChannel(channelId)
+      return unwrapApiData(res)
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['chat', 'channels'] })
+    },
+  })
+}
+
 export function useSendMessage(channelId: string | null) {
   const qc = useQueryClient()
   return useMutation({
@@ -130,6 +321,33 @@ export function appendChannelMessage(
       if (list.some((m) => m.id === message.id)) return list
       return [...list, message]
     },
+  )
+}
+
+export function clearChannelMessages(
+  qc: ReturnType<typeof useQueryClient>,
+  channelId: string,
+) {
+  qc.setQueryData<ChatMessage[]>(queryKeys.chat.messages(channelId), [])
+}
+
+export function removeMessagesBySender(
+  qc: ReturnType<typeof useQueryClient>,
+  channelId: string,
+  senderId: string,
+) {
+  qc.setQueryData<ChatMessage[]>(
+    queryKeys.chat.messages(channelId),
+    (prev) => (prev ?? []).filter((m) => m.senderId !== senderId),
+  )
+}
+
+export function removeChannelFromList(
+  qc: ReturnType<typeof useQueryClient>,
+  channelId: string,
+) {
+  qc.setQueryData<Channel[]>(queryKeys.chat.channels({ limit: 50 }), (prev) =>
+    (prev ?? []).filter((c) => c.id !== channelId),
   )
 }
 

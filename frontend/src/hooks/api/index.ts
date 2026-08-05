@@ -16,9 +16,24 @@ export {
   useCreateChannel,
   useCreateDirectChannel,
   useJoinChannel,
+  useJoinByInviteCode,
+  usePreviewInvite,
+  useChannelInvite,
+  useClearMessages,
+  useChannelMembers,
+  useRemoveMember,
+  useAddMember,
+  useUpdateMemberRole,
+  useDeleteUserMessages,
+  useBlockMember,
+  useUnblockMember,
+  useLeaveChannel,
   useSendMessage,
   useSearchChannels,
   appendChannelMessage,
+  clearChannelMessages,
+  removeMessagesBySender,
+  removeChannelFromList,
 } from './useChat'
 export {
   useVoiceRooms,
@@ -30,6 +45,8 @@ export {
   useRespondCall,
   useEndCall,
   useLeaveVoiceRoom,
+  useClearCallHistory,
+  useHideCallFromHistory,
 } from './useVoice'
 export {
   useContacts,
@@ -38,3 +55,9 @@ export {
   useAddContact,
   useRemoveContact,
 } from './useContacts'
+export {
+  useMyStatus,
+  useUpdateMyStatus,
+  useUsersStatus,
+  resolveUserStatus,
+} from './useStatus'

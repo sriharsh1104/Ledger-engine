@@ -11,6 +11,8 @@ import { TwoFactorPage } from './pages/TwoFactorPage'
 import { AssistantPage } from './pages/AssistantPage'
 import { ChatPage } from './pages/ChatPage'
 import { CallHistoryPage } from './pages/CallHistoryPage'
+import { ContactsPage } from './pages/ContactsPage'
+import { InviteJoinPage } from './pages/InviteJoinPage'
 import { ChatWidget } from './components/chat/ChatWidget'
 
 export default function App() {
@@ -30,7 +32,9 @@ export default function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardLayout />}>
                 <Route path="/messages" element={<ChatPage />} />
+                <Route path="/contacts" element={<ContactsPage />} />
                 <Route path="/calls" element={<CallHistoryPage />} />
+                <Route path="/invite/:code" element={<InviteJoinPage />} />
                 <Route path="/assistant" element={<AssistantPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/security/2fa" element={<TwoFactorPage />} />

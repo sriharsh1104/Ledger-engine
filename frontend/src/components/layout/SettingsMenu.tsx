@@ -3,8 +3,12 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { Settings, User, Shield, LogOut, ChevronRight } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
+import { useMyStatus } from '../../hooks/api'
+import { statusLabel } from '../../lib/status'
 import { ConfirmModal } from '../ui/Modal'
 import { ChangePasswordModal } from '../security/ChangePasswordModal'
+import { StatusPicker } from '../presence/StatusPicker'
+import { UserAvatar } from '../presence/UserAvatar'
 import { getSecuritySettings } from '../../lib/security'
 
 type SettingsTab = 'profile' | 'security'
@@ -15,6 +19,7 @@ interface SettingsMenuProps {
 
 export function SettingsMenu({ onLogout }: SettingsMenuProps) {
   const { user } = useAuth()
+  const { status } = useMyStatus(!!user)
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile')
@@ -130,28 +135,31 @@ export function SettingsMenu({ onLogout }: SettingsMenuProps) {
 
               <div className="p-4">
                 {activeTab === 'profile' && (
-                  <button
-                    onClick={goToProfile}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-surface-overlay transition-colors cursor-pointer animate-fade-in text-left"
-                  >
-                    {user?.profileImage ? (
-                      <img src={user.profileImage} alt="" className="w-12 h-12 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold text-lg">
-                        {user?.name?.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white truncate">{user?.name}</p>
-                      <p className="text-xs text-slate-500 truncate">{user?.email}</p>
-                      {user?.phoneNumber && (
+                  <div className="space-y-3 animate-fade-in">
+                    <button
+                      onClick={goToProfile}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-surface-overlay transition-colors cursor-pointer text-left"
+                    >
+                      <UserAvatar
+                        name={user?.name || '?'}
+                        image={user?.profileImage}
+                        status={status}
+                        size="lg"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{user?.name}</p>
+                        <p className="text-xs text-slate-500 truncate">{user?.email}</p>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {user.phoneCode} {user.phoneNumber}
+                          {statusLabel(status)}
+                          {user?.phoneNumber
+                            ? ` · ${user.phoneCode} ${user.phoneNumber}`
+                            : ''}
                         </p>
-                      )}
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-                  </button>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
+                    </button>
+                    <StatusPicker variant="chips" />
+                  </div>
                 )}
 
                 {activeTab === 'security' && (

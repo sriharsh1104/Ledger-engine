@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChatbotApiError, getChatbotApiKey } from '../api/chatbotClient'
-import type { ChatMode, UiChatMessage } from '../api/chatbot.types'
+import { ChatbotApiError, canUseChatbot } from '../api/chatbotClient'
+import type { ChatbotUsage, ChatMode, UiChatMessage } from '../api/chatbot.types'
 import { CHAT_MODES, chatbotService } from '../services/chatbot.service'
 
 function newId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+function formatChatError(err: unknown): string {
+  if (err instanceof ChatbotApiError) {
+    if (err.code === 'CHATBOT_DAILY_LIMIT' || err.status === 429) {
+      return 'Daily AI query limit reached. Try again tomorrow.'
+    }
+    if (err.code === 'CHATBOT_CONVERSATION_FORBIDDEN' || err.status === 403) {
+      return 'You do not have access to this conversation.'
+    }
+    if (err.code === 'CHATBOT_NOT_CONFIGURED' || err.status === 503) {
+      return 'AI assistant is temporarily unavailable.'
+    }
+    return err.message
+  }
+  if (err instanceof Error) return err.message
+  return 'Failed to send message'
 }
 
 export function useChatbot() {
@@ -18,23 +35,41 @@ export function useChatbot() {
   const [loadingConversations, setLoadingConversations] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [usage, setUsage] = useState<ChatbotUsage | null>(null)
   const [meta, setMeta] = useState<{
     model_used?: string
     calls_remaining_today?: number
   }>({})
-  const [hasApiKey, setHasApiKey] = useState(() => Boolean(getChatbotApiKey()))
+  const [ready, setReady] = useState(() => canUseChatbot())
   const abortRef = useRef<AbortController | null>(null)
 
-  const refreshKeyState = useCallback(() => {
-    setHasApiKey(Boolean(getChatbotApiKey()))
+  const refreshAuthState = useCallback(() => {
+    setReady(canUseChatbot())
   }, [])
 
   useEffect(() => {
     chatbotService.listModes().then(setModes).catch(() => setModes(CHAT_MODES))
   }, [])
 
+  const refreshUsage = useCallback(async () => {
+    if (!canUseChatbot()) {
+      setUsage(null)
+      return
+    }
+    try {
+      const next = await chatbotService.usage()
+      setUsage(next)
+      setMeta((prev) => ({
+        ...prev,
+        calls_remaining_today: next.callsRemainingToday,
+      }))
+    } catch {
+      // usage is optional for UI
+    }
+  }, [])
+
   const refreshConversations = useCallback(async () => {
-    if (!getChatbotApiKey()) return
+    if (!canUseChatbot()) return
     setLoadingConversations(true)
     try {
       const list = await chatbotService.listConversations()
@@ -47,16 +82,24 @@ export function useChatbot() {
   }, [])
 
   useEffect(() => {
-    if (hasApiKey) void refreshConversations()
-  }, [hasApiKey, refreshConversations])
+    if (!ready) {
+      setUsage(null)
+      setConversations([])
+      return
+    }
+    void refreshUsage()
+    void refreshConversations()
+  }, [ready, refreshConversations, refreshUsage])
 
   const resetChat = useCallback(() => {
     abortRef.current?.abort()
     setMessages([])
     setConversationId(null)
     setError(null)
-    setMeta({})
-  }, [])
+    setMeta((prev) => ({
+      calls_remaining_today: prev.calls_remaining_today ?? usage?.callsRemainingToday,
+    }))
+  }, [usage?.callsRemainingToday])
 
   const loadConversation = useCallback(async (id: string) => {
     setError(null)
@@ -75,7 +118,7 @@ export function useChatbot() {
           })),
       )
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load conversation')
+      setError(formatChatError(err) || 'Failed to load conversation')
     } finally {
       setSending(false)
     }
@@ -142,10 +185,18 @@ export function useChatbot() {
           setConversationId(streamMeta.conversation_id)
         }
 
+        const remaining = streamMeta.calls_remaining_today
         setMeta({
           model_used: streamMeta.model_used,
-          calls_remaining_today: streamMeta.calls_remaining_today,
+          calls_remaining_today: remaining,
         })
+        if (typeof remaining === 'number' && usage) {
+          setUsage({
+            ...usage,
+            usedToday: Math.max(0, usage.dailyLimit - remaining),
+            callsRemainingToday: remaining,
+          })
+        }
 
         setMessages((prev) =>
           prev.map((m) =>
@@ -166,6 +217,7 @@ export function useChatbot() {
         )
 
         void refreshConversations()
+        void refreshUsage()
       } catch (err) {
         if (controller.signal.aborted) {
           setMessages((prev) =>
@@ -176,12 +228,7 @@ export function useChatbot() {
             ),
           )
         } else {
-          const message =
-            err instanceof ChatbotApiError
-              ? err.message
-              : err instanceof Error
-                ? err.message
-                : 'Failed to send message'
+          const message = formatChatError(err)
           setError(message)
           setMessages((prev) =>
             prev.map((m) =>
@@ -195,13 +242,16 @@ export function useChatbot() {
                 : m,
             ),
           )
+          if (err instanceof ChatbotApiError && err.code === 'CHATBOT_DAILY_LIMIT') {
+            void refreshUsage()
+          }
         }
       } finally {
         abortRef.current = null
         setSending(false)
       }
     },
-    [conversationId, mode, refreshConversations, sending],
+    [conversationId, mode, refreshConversations, refreshUsage, sending, usage],
   )
 
   const stop = useCallback(() => {
@@ -219,9 +269,12 @@ export function useChatbot() {
     sending,
     error,
     meta,
-    hasApiKey,
-    refreshKeyState,
+    usage,
+    /** Logged in → can use chatbot via gateway JWT. */
+    canChat: ready,
+    refreshAuthState,
     refreshConversations,
+    refreshUsage,
     resetChat,
     loadConversation,
     sendMessage,

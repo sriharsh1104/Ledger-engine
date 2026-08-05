@@ -1,24 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Bot, PanelLeftClose, PanelLeft, Settings2 } from 'lucide-react'
+import { Bot, PanelLeftClose, PanelLeft } from 'lucide-react'
 import { useChatbot } from '../hooks/useChatbot'
-import {
-  clearChatbotApiKey,
-  getChatbotApiKey,
-  setChatbotApiKey,
-} from '../api/chatbotClient'
-import { ApiKeySetup } from '../components/chat/ApiKeySetup'
+import { useAuth } from '../hooks/useAuth'
+import { ChatSignInGate } from '../components/chat/ChatSignInGate'
 import { ChatInput } from '../components/chat/ChatInput'
 import { ChatMessage } from '../components/chat/ChatMessage'
 import { ConversationSidebar } from '../components/chat/ConversationSidebar'
 import { Button } from '../components/ui/Button'
-import { Input } from '../components/ui/Input'
 
 export function AssistantPage() {
   const chat = useChatbot()
+  const { isAuthenticated } = useAuth()
   const scrollRef = useRef<HTMLDivElement>(null)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [showSettings, setShowSettings] = useState(false)
-  const [keyDraft, setKeyDraft] = useState('')
+
+  useEffect(() => {
+    chat.refreshAuthState()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-check when auth flips
+  }, [isAuthenticated])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -26,20 +25,25 @@ export function AssistantPage() {
     el.scrollTop = el.scrollHeight
   }, [chat.messages, chat.sending])
 
-  if (!chat.hasApiKey) {
+  if (!isAuthenticated) {
     return (
-      <div className="-m-4 lg:-m-8 flex-1 min-h-0 flex bg-surface">
-        <ApiKeySetup onSaved={chat.refreshKeyState} />
+      <div className="absolute inset-0 flex bg-surface overflow-hidden">
+        <ChatSignInGate />
       </div>
     )
   }
 
+  const remaining =
+    chat.meta.calls_remaining_today ?? chat.usage?.callsRemainingToday
+  const dailyLimit = chat.usage?.dailyLimit
+  const usedToday = chat.usage?.usedToday
+
   return (
-    <div className="-m-4 lg:-m-8 flex-1 min-h-0 flex bg-surface overflow-hidden">
+    <div className="absolute inset-0 flex bg-surface overflow-hidden">
       <div
         className={`${
           sidebarOpen ? 'w-64' : 'w-0'
-        } hidden md:block shrink-0 transition-all duration-200 overflow-hidden`}
+        } hidden md:flex flex-col shrink-0 h-full min-h-0 transition-all duration-200 overflow-hidden`}
       >
         <ConversationSidebar
           conversations={chat.conversations}
@@ -50,7 +54,7 @@ export function AssistantPage() {
         />
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden">
         <header className="shrink-0 h-14 border-b border-border-subtle px-4 flex items-center justify-between gap-3 bg-surface-raised/50">
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -70,9 +74,14 @@ export function AssistantPage() {
                 <p className="text-[10px] text-slate-500 truncate">
                   {chat.meta.model_used
                     ? `Model: ${chat.meta.model_used}`
-                    : 'Powered by AI CLI Chatbot'}
-                  {chat.meta.calls_remaining_today != null
-                    ? ` · ${chat.meta.calls_remaining_today} calls left today`
+                    : 'Your account history'}
+                  {remaining != null
+                    ? ` · ${remaining}${dailyLimit != null ? `/${dailyLimit}` : ''} left today`
+                    : dailyLimit != null
+                      ? ` · ${dailyLimit} queries/day`
+                      : ''}
+                  {usedToday != null && dailyLimit != null
+                    ? ` · used ${usedToday}`
                     : ''}
                 </p>
               </div>
@@ -92,68 +101,18 @@ export function AssistantPage() {
                 </option>
               ))}
             </select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setKeyDraft(getChatbotApiKey())
-                setShowSettings((v) => !v)
-              }}
-              aria-label="Settings"
-            >
-              <Settings2 className="w-4 h-4" />
+            <Button variant="ghost" size="sm" onClick={chat.resetChat}>
+              New
             </Button>
           </div>
         </header>
 
-        {showSettings && (
-          <div className="border-b border-border-subtle bg-surface-raised px-4 py-3 space-y-3 animate-fade-in">
-            <p className="text-xs text-slate-400">
-              API key is sent as <code className="text-slate-300">X-API-Key</code> to the chatbot
-              service. Stored in this browser only.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="flex-1">
-                <Input
-                  type="password"
-                  value={keyDraft}
-                  onChange={(e) => setKeyDraft(e.target.value)}
-                  placeholder="API key"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setChatbotApiKey(keyDraft)
-                    chat.refreshKeyState()
-                    void chat.refreshConversations()
-                    setShowSettings(false)
-                  }}
-                >
-                  Update key
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => {
-                    clearChatbotApiKey()
-                    chat.refreshKeyState()
-                    chat.resetChat()
-                    setShowSettings(false)
-                  }}
-                >
-                  Remove
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 lg:px-8 py-6">
+        <div
+          ref={scrollRef}
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 lg:px-8 py-6"
+        >
           {chat.messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center gap-4 max-w-lg mx-auto animate-fade-in">
+            <div className="min-h-full flex flex-col items-center justify-center text-center gap-4 max-w-lg mx-auto animate-fade-in">
               <div className="w-14 h-14 rounded-2xl bg-accent/15 flex items-center justify-center">
                 <Bot className="w-7 h-7 text-accent" />
               </div>
@@ -191,16 +150,15 @@ export function AssistantPage() {
 
         <div className="shrink-0 border-t border-border-subtle px-4 lg:px-8 py-4 bg-surface-raised/40">
           <div className="max-w-3xl mx-auto space-y-2">
-            {chat.error && (
-              <p className="text-xs text-danger px-1">{chat.error}</p>
-            )}
+            {chat.error && <p className="text-xs text-danger px-1">{chat.error}</p>}
             <ChatInput
               sending={chat.sending}
               onSend={(msg) => void chat.sendMessage(msg)}
               onStop={chat.stop}
             />
             <p className="text-[10px] text-slate-500 text-center">
-              Responses come from the AI CLI Chatbot API · mode: {chat.mode}
+              Account-scoped history · mode: {chat.mode}
+              {remaining != null ? ` · ${remaining} left today` : ''}
             </p>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { ChatMessage } from '../../api/comms.types'
 import type { User } from '../../types'
-import { resolvePeerLabel } from '../../lib/displayName'
+import { resolvePeerLabel, resolveSenderUser, senderNameIndex } from '../../lib/displayName'
 
 interface MessagePanelProps {
   messages: ChatMessage[]
@@ -60,10 +60,7 @@ export function MessagePanel({
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages.length])
 
-  const contactIds = useMemo(
-    () => new Set(contacts.map((c) => c.id)),
-    [contacts],
-  )
+  const namesBySender = useMemo(() => senderNameIndex(messages), [messages])
 
   if (loading) {
     return (
@@ -88,26 +85,16 @@ export function MessagePanel({
         const showDay = !prev || !sameDay(prev.createdAt, msg.createdAt)
         const isMine = msg.senderId === currentUser?.id
 
-        const senderUser: User | undefined = msg.sender
-          ? {
-              ...msg.sender,
-              isContact:
-                msg.sender.isContact === true || contactIds.has(msg.senderId),
-            }
-          : contactIds.has(msg.senderId)
-            ? contacts.find((c) => c.id === msg.senderId)
-            : undefined
+        const senderUser = resolveSenderUser(
+          msg.senderId,
+          msg.sender,
+          contacts,
+          namesBySender.get(msg.senderId),
+        )
 
         const display = isMine
           ? { title: 'You', isContact: false as const }
-          : resolvePeerLabel(
-              senderUser ?? {
-                id: msg.senderId,
-                name: msg.senderId.slice(0, 8),
-                email: '',
-              },
-              contacts,
-            )
+          : resolvePeerLabel(senderUser, contacts)
 
         const initial = display.title.charAt(0).toUpperCase()
         const avatarSrc = display.isContact

@@ -1,26 +1,15 @@
 import { config } from '../lib/config'
 
-const API_KEY_STORAGE = 'ledger_chatbot_api_key'
+const TOKEN_KEY = 'ledger_token'
 
-export function getChatbotApiKey(): string {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(API_KEY_STORAGE)?.trim()
-    if (stored) return stored
-  }
-  return config.chatbotApiKey.trim()
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(TOKEN_KEY)
 }
 
-export function setChatbotApiKey(key: string) {
-  const trimmed = key.trim()
-  if (trimmed) {
-    localStorage.setItem(API_KEY_STORAGE, trimmed)
-  } else {
-    localStorage.removeItem(API_KEY_STORAGE)
-  }
-}
-
-export function clearChatbotApiKey() {
-  localStorage.removeItem(API_KEY_STORAGE)
+/** Ready when the user has a JWT (api-gateway chatbot routes). */
+export function canUseChatbot(): boolean {
+  return Boolean(getAuthToken()?.trim())
 }
 
 export function getChatbotBaseUrl(): string {
@@ -49,9 +38,10 @@ async function parseError(res: Response): Promise<ChatbotApiError> {
       message = detail
     } else if (detail && typeof detail === 'object') {
       message = detail.message ?? detail.error ?? message
-      code = detail.error
+      code = detail.error ?? detail.code
     } else if (typeof body?.message === 'string') {
       message = body.message
+      code = typeof body?.code === 'string' ? body.code : code
     }
   } catch {
     // ignore JSON parse errors
@@ -59,16 +49,20 @@ async function parseError(res: Response): Promise<ChatbotApiError> {
   return new ChatbotApiError(message, res.status, code)
 }
 
+/**
+ * Authenticated fetch against api-gateway `/api/v1/chatbot/*`.
+ * Used for streaming; JSON endpoints prefer axios `apiClient`.
+ */
 export async function chatbotFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  const apiKey = getChatbotApiKey()
-  if (!apiKey) {
+  const token = getAuthToken()?.trim()
+  if (!token) {
     throw new ChatbotApiError(
-      'Missing chatbot API key. Add VITE_CHATBOT_API_KEY or save a key in Assistant settings.',
+      'Sign in to use the AI assistant.',
       401,
-      'missing_api_key',
+      'missing_auth',
     )
   }
 
@@ -77,7 +71,7 @@ export async function chatbotFetch(
     headers.set('Content-Type', 'application/json')
   }
   headers.set('Accept', headers.get('Accept') ?? 'application/json')
-  headers.set('X-API-Key', apiKey)
+  headers.set('Authorization', `Bearer ${token}`)
 
   const res = await fetch(`${getChatbotBaseUrl()}${path}`, {
     ...init,
