@@ -38,16 +38,22 @@ export {
 } from './useChat'
 export {
   useVoiceRooms,
+  useMyVoiceRooms,
+  useDiscoverVoiceRooms,
   useCallHistory,
   useCreateVoiceRoom,
   useJoinVoiceRoom,
+  useConnectVoiceRoom,
+  useDisconnectVoiceRoom,
   useStartDirectCall,
   useStartGroupCall,
   useRespondCall,
   useEndCall,
   useLeaveVoiceRoom,
+  useDeleteVoiceRoom,
   useClearCallHistory,
   useHideCallFromHistory,
+  removeVoiceRoomFromList,
 } from './useVoice'
 export {
   useContacts,

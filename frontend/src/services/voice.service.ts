@@ -17,25 +17,73 @@ import type { User } from '../types'
 const VOICE = '/voice'
 
 export const voiceService = {
-  /** Public voice lobbies only — private rooms are invite+password */
-  listRooms: (params?: { limit?: number; offset?: number }) =>
+  /**
+   * Discover public voice lobbies.
+   * GET /voice/rooms?q=
+   */
+  discoverRooms: (params?: { q?: string; limit?: number; offset?: number }) =>
     apiClient.get<ApiResponse<VoiceRoom[]>>(`${VOICE}/rooms`, { params }),
+
+  /**
+   * Sidebar — rooms you’ve created or joined.
+   * GET /voice/rooms/mine
+   */
+  listMyRooms: (params?: { limit?: number; offset?: number }) =>
+    apiClient.get<ApiResponse<VoiceRoom[]>>(`${VOICE}/rooms/mine`, { params }),
 
   getRoom: (roomId: string) =>
     apiClient.get<ApiResponse<VoiceRoom>>(`${VOICE}/rooms/${roomId}`),
 
+  /** Create lobby — only creator is on their mine list. */
   createRoom: (data: CreateVoiceRoomRequest) =>
-    apiClient.post<ApiResponse<RoomSession>>(`${VOICE}/rooms`, data),
+    apiClient.post<ApiResponse<VoiceRoom | RoomSession>>(`${VOICE}/rooms`, data),
 
+  /**
+   * Opt-in membership (no LiveKit, no notifications).
+   * POST /voice/rooms/:id/join
+   */
   joinRoom: (roomId: string, data: JoinVoiceRoomRequest = {}) =>
-    apiClient.post<ApiResponse<RoomSession>>(`${VOICE}/rooms/${roomId}/join`, {
-      inviteCode: data.inviteCode ?? '',
-      ...(data.password ? { password: data.password } : {}),
-    }),
+    apiClient.post<ApiResponse<VoiceRoom | RoomSession>>(
+      `${VOICE}/rooms/${roomId}/join`,
+      {
+        inviteCode: data.inviteCode ?? '',
+        ...(data.password ? { password: data.password } : {}),
+      },
+    ),
 
+  /**
+   * Start talking — LiveKit token + presence.
+   * POST /voice/rooms/:id/connect
+   */
+  connectRoom: (roomId: string) =>
+    apiClient.post<ApiResponse<LiveKitCredentials | RoomSession>>(
+      `${VOICE}/rooms/${roomId}/connect`,
+    ),
+
+  /**
+   * Stop talking — leave LiveKit, stay on mine list.
+   * POST /voice/rooms/:id/disconnect
+   */
+  disconnectRoom: (roomId: string) =>
+    apiClient.post<ApiResponse<unknown>>(
+      `${VOICE}/rooms/${roomId}/disconnect`,
+    ),
+
+  /**
+   * Remove membership from your list.
+   * POST /voice/rooms/:id/leave
+   */
   leaveRoom: (roomId: string) =>
     apiClient.post<ApiResponse<unknown>>(`${VOICE}/rooms/${roomId}/leave`),
 
+  /**
+   * Owner: delete lobby for everyone.
+   * DELETE /voice/rooms/:id
+   */
+  deleteRoom: (roomId: string) =>
+    apiClient.delete<ApiResponse<unknown>>(`${VOICE}/rooms/${roomId}`),
+
+  /** @deprecated prefer connectRoom */
   refreshLivekitToken: (roomId: string) =>
     apiClient.get<ApiResponse<LiveKitCredentials>>(
       `${VOICE}/rooms/${roomId}/livekit-token`,
@@ -64,20 +112,17 @@ export const voiceService = {
       peerUserId,
     }),
 
-  /** Call history for the authenticated user only. */
   getCallHistory: (params?: { limit?: number; offset?: number }) =>
     apiClient.get<ApiResponse<CallHistoryEntry[]>>(
       `${VOICE}/calls/history`,
       { params },
     ),
 
-  /** Hide all calls from this user's history (others unaffected). */
   clearCallHistory: () =>
     apiClient.delete<ApiResponse<{ hiddenCount: number }>>(
       `${VOICE}/calls/history`,
     ),
 
-  /** Hide one call from this user's history. */
   hideCallFromHistory: (callId: string) =>
     apiClient.delete<ApiResponse<{ message: string }>>(
       `${VOICE}/calls/history/${callId}`,

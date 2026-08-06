@@ -30,13 +30,16 @@ import {
   clearChannelMessages,
   removeMessagesBySender,
   removeChannelFromList,
-  useVoiceRooms,
+  useMyVoiceRooms,
   useCreateVoiceRoom,
   useJoinVoiceRoom,
+  useConnectVoiceRoom,
+  useDisconnectVoiceRoom,
   useStartDirectCall,
   useRespondCall,
   useEndCall,
   useLeaveVoiceRoom,
+  useDeleteVoiceRoom,
   useContacts,
 } from '../hooks/api'
 import { getApiErrorMessage } from '../api/client'
@@ -53,6 +56,7 @@ import type {
   ChatUserMessagesDeletedEvent,
   GatewayEvent,
   LiveKitCredentials,
+  VoiceRoom,
 } from '../api/comms.types'
 import type { User } from '../types'
 import { peerFromMessages, resolvePeerLabel, looksLikeTruncatedId } from '../lib/displayName'
@@ -68,6 +72,7 @@ import {
   NewRoomModal,
   ContactsModal,
   FindGroupModal,
+  FindVoiceRoomsModal,
 } from '../components/comms/CommsModals'
 import { GroupInviteModal } from '../components/comms/GroupInviteModal'
 import { GroupMembersModal } from '../components/comms/GroupMembersModal'
@@ -112,14 +117,18 @@ export function ChatPage() {
     | 'find-groups'
     | 'join-channel'
     | 'room'
+    | 'discover-rooms'
     | 'join-room'
     | 'contacts'
     | 'invite'
     | 'members'
   >(null)
+  const [confirmVoiceAction, setConfirmVoiceAction] = useState<
+    null | { type: 'leave' | 'delete'; room: VoiceRoom }
+  >(null)
 
   const channelsQuery = useChannels({ limit: 50 })
-  const roomsQuery = useVoiceRooms({ limit: 50 })
+  const roomsQuery = useMyVoiceRooms({ limit: 50 })
   const contactsQuery = useContacts({ limit: 100 })
   const messagesQuery = useChannelMessages(selectedChannelId)
   const sendMessage = useSendMessage(selectedChannelId)
@@ -132,10 +141,13 @@ export function ChatPage() {
   const deleteChannel = useDeleteChannel()
   const createRoom = useCreateVoiceRoom()
   const joinRoom = useJoinVoiceRoom()
+  const connectRoom = useConnectVoiceRoom()
+  const disconnectRoom = useDisconnectVoiceRoom()
   const startDirectCall = useStartDirectCall()
   const respondCall = useRespondCall()
   const endCall = useEndCall()
   const leaveRoom = useLeaveVoiceRoom()
+  const deleteRoom = useDeleteVoiceRoom()
   const livekit = useLiveKitRoom()
 
   const channels = channelsQuery.data ?? []
@@ -253,12 +265,13 @@ export function ChatPage() {
       if (session.kind === 'call') {
         await endCall.mutateAsync(session.roomId)
       } else {
-        await leaveRoom.mutateAsync(session.roomId)
+        // Voice lobby: stop talking but keep room on My voice rooms list
+        await disconnectRoom.mutateAsync(session.roomId)
       }
     } catch {
       // hangup best-effort
     }
-  }, [activeSession, endCall, leaveRoom, livekit])
+  }, [activeSession, disconnectRoom, endCall, livekit])
 
   const onGatewayEvent = useCallback(
     (event: GatewayEvent) => {
@@ -636,21 +649,33 @@ export function ChatPage() {
     title: string,
     creds?: LiveKitCredentials | null,
   ) {
+    setSelectedChannelId(null)
     setSelectedRoomId(roomId)
+    let livekitCreds = creds
+    if (!livekitCreds?.url || !livekitCreds?.token) {
+      const connected = await connectRoom.mutateAsync(roomId)
+      livekitCreds = connected.livekit
+    }
     await beginLiveSession(
       { kind: 'room', roomId, title, status: 'In voice room' },
-      creds,
+      livekitCreds,
     )
     socket.subscribeVoice(roomId)
   }
 
+  /** Room already on /mine — talk via connect (not join). */
   async function handleSelectRoom(roomId: string) {
+    const room = rooms.find((r) => r.id === roomId)
     try {
-      const session = await joinRoom.mutateAsync({ roomId })
-      await connectRoomSession(session.room.id, session.room.name, session.livekit)
+      await connectRoomSession(roomId, room?.name || 'Voice room')
     } catch (err) {
       setBanner(getApiErrorMessage(err))
     }
+  }
+
+  async function handleJoinVoiceLobby(room: VoiceRoom) {
+    await joinRoom.mutateAsync({ roomId: room.id })
+    setBanner(`Added “${room.name}” to My voice rooms`)
   }
 
   return (
@@ -662,6 +687,7 @@ export function ChatPage() {
           selectedChannelId={selectedChannelId}
           selectedRoomId={selectedRoomId}
           wsConnected={socket.connected}
+          currentUserId={user?.id}
           channelLabel={channelLabel}
           onSelectChannel={(id) => {
             setSelectedChannelId(id)
@@ -673,7 +699,10 @@ export function ChatPage() {
           onFindGroups={() => setModal('find-groups')}
           onJoinPrivateChannel={() => setModal('join-channel')}
           onNewRoom={() => setModal('room')}
+          onDiscoverRooms={() => setModal('discover-rooms')}
           onJoinPrivateRoom={() => setModal('join-room')}
+          onLeaveRoom={(room) => setConfirmVoiceAction({ type: 'leave', room })}
+          onDeleteRoom={(room) => setConfirmVoiceAction({ type: 'delete', room })}
           onOpenContacts={() => setModal('contacts')}
         />
 
@@ -1040,22 +1069,29 @@ export function ChatPage() {
         open={modal === 'room'}
         onClose={() => setModal(null)}
         onSubmit={async (data) => {
-          const session = await createRoom.mutateAsync({
+          const created = await createRoom.mutateAsync({
             ...data,
             kind: 'group',
           })
           await connectRoomSession(
-            session.room.id,
-            session.room.name,
-            session.livekit,
+            created.room.id,
+            created.room.name,
+            created.livekit,
           )
-          if (session.room.inviteCode) {
+          if (created.room.inviteCode) {
             setBanner(
-              `Voice room ready · code ${session.room.inviteCode}` +
+              `Voice room ready · code ${created.room.inviteCode}` +
                 (data.visibility === 'private' ? ' + password required to join' : ''),
             )
           }
         }}
+      />
+
+      <FindVoiceRoomsModal
+        open={modal === 'discover-rooms'}
+        onClose={() => setModal(null)}
+        joinedIds={rooms.map((r) => r.id)}
+        onJoin={(room) => handleJoinVoiceLobby(room)}
       />
 
       <JoinByCodeModal
@@ -1066,16 +1102,61 @@ export function ChatPage() {
         codeLabel="Invite code"
         requirePassword
         onSubmit={async ({ id, inviteCode, password }) => {
-          const session = await joinRoom.mutateAsync({
+          const joined = await joinRoom.mutateAsync({
             roomId: id,
             inviteCode,
             password,
           })
           await connectRoomSession(
-            session.room.id,
-            session.room.name,
-            session.livekit,
+            joined.room.id,
+            joined.room.name,
+            joined.livekit,
           )
+        }}
+      />
+
+      <ConfirmModal
+        open={confirmVoiceAction !== null}
+        onClose={() => setConfirmVoiceAction(null)}
+        title={
+          confirmVoiceAction?.type === 'delete'
+            ? 'Delete this voice room?'
+            : 'Remove from your list?'
+        }
+        message={
+          confirmVoiceAction?.type === 'delete'
+            ? `“${confirmVoiceAction.room.name}” will be deleted for everyone. This cannot be undone.`
+            : `“${confirmVoiceAction?.room.name}” will leave your My voice rooms list. You can join again later.`
+        }
+        confirmLabel={
+          confirmVoiceAction?.type === 'delete' ? 'Delete room' : 'Remove'
+        }
+        cancelLabel="Cancel"
+        onConfirm={() => {
+          void (async () => {
+            if (!confirmVoiceAction) return
+            const { type, room } = confirmVoiceAction
+            try {
+              if (
+                activeSession?.kind === 'room' &&
+                activeSession.roomId === room.id
+              ) {
+                await hangUp()
+              }
+              if (type === 'delete') {
+                await deleteRoom.mutateAsync(room.id)
+                setBanner(`Deleted voice room “${room.name}”`)
+              } else {
+                await leaveRoom.mutateAsync(room.id)
+                setBanner(`Removed “${room.name}” from your list`)
+              }
+              if (selectedRoomId === room.id) setSelectedRoomId(null)
+            } catch (err) {
+              setBanner(getApiErrorMessage(err))
+            } finally {
+              setConfirmVoiceAction(null)
+            }
+          })()
         }}
       />
 

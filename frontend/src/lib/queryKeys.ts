@@ -35,8 +35,11 @@ export const queryKeys = {
     search: (q: string) => ['chat', 'channels', 'search', q] as const,
   },
   voice: {
+    myRooms: (params?: { limit?: number; offset?: number }) =>
+      ['voice', 'rooms', 'mine', params] as const,
+    discover: (q: string) => ['voice', 'rooms', 'discover', q] as const,
     rooms: (params?: { limit?: number; offset?: number }) =>
-      ['voice', 'rooms', params] as const,
+      ['voice', 'rooms', 'mine', params] as const,
     room: (id: string) => ['voice', 'room', id] as const,
     members: (roomId: string) => ['voice', 'members', roomId] as const,
     callHistory: (params?: { limit?: number; offset?: number }) =>

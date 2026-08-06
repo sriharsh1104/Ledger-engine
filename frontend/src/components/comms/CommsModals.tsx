@@ -1,11 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react'
-import { Hash, Lock, Search } from 'lucide-react'
+import { Hash, Lock, Phone, Search } from 'lucide-react'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { UserSearchPicker } from './UserSearchPicker'
-import { useSearchChannels } from '../../hooks/api'
-import type { Channel } from '../../api/comms.types'
+import { useDiscoverVoiceRooms, useSearchChannels } from '../../hooks/api'
+import type { Channel, VoiceRoom } from '../../api/comms.types'
 import type { User } from '../../types'
 
 interface NewChannelModalProps {
@@ -212,6 +212,122 @@ export function FindGroupModal({ open, onClose, onJoin }: FindGroupModalProps) {
               </Button>
             </div>
           ))}
+        </div>
+        {error && <p className="text-sm text-danger">{error}</p>}
+        <div className="flex justify-end">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+interface FindVoiceRoomsModalProps {
+  open: boolean
+  onClose: () => void
+  /** Join public lobby (membership only — adds to My voice rooms). */
+  onJoin: (room: VoiceRoom) => Promise<void>
+  /** Room ids already on the user's mine list */
+  joinedIds?: string[]
+}
+
+export function FindVoiceRoomsModal({
+  open,
+  onClose,
+  onJoin,
+  joinedIds,
+}: FindVoiceRoomsModalProps) {
+  const [q, setQ] = useState('')
+  const [debounced, setDebounced] = useState('')
+  const [joiningId, setJoiningId] = useState<string | null>(null)
+  const [error, setError] = useState('')
+  const discover = useDiscoverVoiceRooms(debounced, open)
+  const joined = new Set(joinedIds ?? [])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
+
+  useEffect(() => {
+    if (!open) {
+      setQ('')
+      setDebounced('')
+      setError('')
+      setJoiningId(null)
+    }
+  }, [open])
+
+  async function handleJoin(room: VoiceRoom) {
+    setJoiningId(room.id)
+    setError('')
+    try {
+      await onJoin(room)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Join failed')
+    } finally {
+      setJoiningId(null)
+    }
+  }
+
+  const rooms = discover.data ?? []
+
+  return (
+    <Modal open={open} onClose={onClose} title="Discover public voice rooms" size="md">
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search public lobbies…"
+            autoFocus
+            className="w-full rounded-xl bg-surface-overlay border border-border pl-9 pr-4 py-2.5 text-sm text-white
+              placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:border-accent"
+          />
+        </div>
+        <p className="text-[11px] text-slate-500">
+          Public lobbies only. Join adds the room to your list — talking starts when you open it.
+        </p>
+        <div className="max-h-72 overflow-y-auto rounded-xl border border-border-subtle divide-y divide-border-subtle">
+          {discover.isFetching && (
+            <p className="px-3 py-4 text-sm text-slate-500 text-center">Loading…</p>
+          )}
+          {!discover.isFetching && rooms.length === 0 && (
+            <p className="px-3 py-4 text-sm text-slate-500 text-center">
+              {debounced ? 'No public rooms found' : 'No public voice rooms right now'}
+            </p>
+          )}
+          {rooms.map((room) => {
+            const already = joined.has(room.id)
+            return (
+              <div
+                key={room.id}
+                className="flex items-center gap-3 px-3 py-2.5 hover:bg-surface-overlay"
+              >
+                <div className="w-9 h-9 rounded-xl bg-accent/15 flex items-center justify-center text-accent shrink-0">
+                  <Phone className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-white truncate">{room.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    public · {room.memberCount} on list
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  loading={joiningId === room.id}
+                  disabled={already}
+                  onClick={() => void handleJoin(room)}
+                >
+                  {already ? 'Joined' : 'Join'}
+                </Button>
+              </div>
+            )
+          })}
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end">
@@ -518,8 +634,8 @@ export function NewRoomModal({ open, onClose, onSubmit }: NewRoomModalProps) {
           </div>
           <p className="text-[11px] text-slate-500 mt-2">
             {visibility === 'public'
-              ? 'Public rooms get an invite code and appear in the public list — no password.'
-              : 'Private rooms get a random invite code. Joiners must enter code + password.'}
+              ? 'Public rooms appear in Discover. Only you are on the list until others join.'
+              : 'Private rooms need invite code + password. They do not appear in Discover.'}
           </p>
         </div>
         {visibility === 'private' && (
